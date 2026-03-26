@@ -81,9 +81,13 @@ fun GameScreen(viewModel: GameViewModel) {
                 state.phase == GamePhase.FINISHED -> when (state.endReason) {
                     GameEndReason.HARMONY_RING -> "Victory by Harmony Ring."
                     GameEndReason.LAST_BASIC_PLAYED -> "End by last Basic tile and midline harmonies."
+                    GameEndReason.FORCED_DRAW -> "Game ended in a forced draw."
                     null -> "Game finished."
                 }
-                state.selectedSource != null -> "Arrange source: (${state.selectedSource.row}, ${state.selectedSource.col}) | target: ${state.selectedTarget?.let { "(${it.row}, ${it.col})" } ?: "none"}"
+                state.selectedSource != null -> {
+                    val source = state.selectedSource
+                    "Arrange source: (${source?.row}, ${source?.col}) | target: ${state.selectedTarget?.let { "(${it.row}, ${it.col})" } ?: "none"}"
+                }
                 else -> "Plant tile: ${state.selectedTileType?.name ?: "none"} | Gate: ${state.selectedTarget?.let { "(${it.row}, ${it.col})" } ?: "none"}"
             },
             style = MaterialTheme.typography.bodyMedium
