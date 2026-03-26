@@ -73,6 +73,7 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
 
     ModalNavigationDrawer(
         drawerState = drawerState,
+        gesturesEnabled = false,
         drawerContent = {
             ModalDrawerSheet {
                 Text(
@@ -401,7 +402,7 @@ private fun CircularBoard(
                     }
                 }
             },
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.TopStart
     ) {
         Canvas(modifier = Modifier.matchParentSize()) {
             val sizePx = min(size.width, size.height)
@@ -483,6 +484,8 @@ private fun CircularBoard(
             val isSource = selectedSource == position
             val isTarget = selectedTarget == position
             val isLegalTarget = position in legalTargets
+            val isInteractiveHint = position in interactivePoints
+            if (token.isEmpty() && !isSource && !isTarget && !isLegalTarget && !isInteractiveHint) return@forEach
 
             val (fx, fy) = intersectionFraction(position.row, position.col)
             val x = boardSizeDp * fx
@@ -490,6 +493,7 @@ private fun CircularBoard(
 
             Box(
                 modifier = Modifier
+                    .align(Alignment.TopStart)
                     .offset(x = x - pointTouchRadius, y = y - pointTouchRadius)
                     .size(pointTouchRadius * 2)
                     .background(
@@ -497,7 +501,7 @@ private fun CircularBoard(
                             isSource -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
                             isTarget -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)
                             isLegalTarget -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
-                            position in interactivePoints -> Color(0x22000000)
+                            isInteractiveHint -> Color(0x22000000)
                             else -> Color.Transparent
                         },
                         shape = androidx.compose.foundation.shape.CircleShape
@@ -509,12 +513,6 @@ private fun CircularBoard(
                         text = token,
                         style = MaterialTheme.typography.labelSmall,
                         color = if (token.startsWith("A")) Color(0xFF7A1113) else Color(0xFF15264A)
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .size(pointVisualRadius * 2)
-                            .background(Color(0xFF1F1A1B), shape = androidx.compose.foundation.shape.CircleShape)
                     )
                 }
             }
