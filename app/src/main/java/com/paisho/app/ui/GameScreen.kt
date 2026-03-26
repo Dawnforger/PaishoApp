@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -59,9 +59,7 @@ import com.paisho.core.game.GamePhase
 import com.paisho.core.game.Player
 import com.paisho.core.game.Position
 import com.paisho.core.game.TileType
-import kotlin.math.cos
 import kotlin.math.min
-import kotlin.math.sin
 
 @Composable
 fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
@@ -344,61 +342,24 @@ private fun CircularBoard(
     cells: Map<Position, String>
 ) {
     val boardSizeDp = 360.dp
+    val pointTouchRadius = 14.dp
+    val pointVisualRadius = 3.dp
+    val latticeRadiusFraction = 0.44f
+
+    fun intersectionFraction(row: Int, col: Int): Pair<Float, Float> {
+        val nx = if (boardSize <= 1) 0f else (col.toFloat() / (boardSize - 1)) * 2f - 1f
+        val ny = if (boardSize <= 1) 0f else (row.toFloat() / (boardSize - 1)) * 2f - 1f
+        return (0.5f + nx * latticeRadiusFraction) to (0.5f + ny * latticeRadiusFraction)
+    }
+
     Box(modifier = Modifier.size(boardSizeDp), contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.matchParentSize()) {
             val sizePx = min(size.width, size.height)
             val center = Offset(size.width / 2f, size.height / 2f)
             val radius = sizePx * 0.48f
-            val gridStep = (radius * 2f) / (boardSize + 1)
 
             drawCircle(color = Color(0xFF3A3638), radius = radius, center = center, style = Fill)
             drawCircle(color = Color(0xFFD8D0C9), radius = radius * 0.965f, center = center, style = Fill)
-
-            fun insideCircle(p: Offset): Boolean {
-                val dx = p.x - center.x
-                val dy = p.y - center.y
-                return dx * dx + dy * dy <= (radius * 0.96f) * (radius * 0.96f)
-            }
-
-            for (i in -boardSize..boardSize) {
-                val offset = i * gridStep * 0.72f
-                val startA = Offset(center.x - radius, center.y + offset)
-                val endA = Offset(center.x + radius, center.y + offset)
-                drawLine(
-                    color = Color(0xFF1F1A1B),
-                    start = startA,
-                    end = endA,
-                    strokeWidth = 1.4f,
-                    cap = StrokeCap.Round
-                )
-
-                val startB = Offset(center.x + offset, center.y - radius)
-                val endB = Offset(center.x + offset, center.y + radius)
-                drawLine(
-                    color = Color(0xFF1F1A1B),
-                    start = startB,
-                    end = endB,
-                    strokeWidth = 1.4f,
-                    cap = StrokeCap.Round
-                )
-            }
-
-            // Diagonal crosshatch grid similar to the reference style.
-            for (i in -boardSize..boardSize) {
-                val offset = i * gridStep * 0.72f
-                drawLine(
-                    color = Color(0xFF1F1A1B),
-                    start = Offset(center.x - radius, center.y - radius + offset),
-                    end = Offset(center.x + radius, center.y + radius + offset),
-                    strokeWidth = 1.2f
-                )
-                drawLine(
-                    color = Color(0xFF1F1A1B),
-                    start = Offset(center.x - radius, center.y + radius + offset),
-                    end = Offset(center.x + radius, center.y - radius + offset),
-                    strokeWidth = 1.2f
-                )
-            }
 
             val centralPath = Path().apply {
                 val top = Offset(center.x, center.y - radius * 0.52f)
@@ -423,11 +384,52 @@ private fun CircularBoard(
                 lineTo(bottom.x, bottom.y)
             }
             drawPath(path = centralPath, color = Color(0xFFA1262A), style = Fill)
+
+            // Draw board lattice lines between intersections, so pieces sit on line crossings.
+            for (row in 0 until boardSize) {
+                var prev: Offset? = null
+                for (col in 0 until boardSize) {
+                    val (fx, fy) = intersectionFraction(row, col)
+                    val point = Offset(size.width * fx, size.height * fy)
+                    prev?.let {
+                        drawLine(
+                            color = Color(0xFF1F1A1B),
+                            start = it,
+                            end = point,
+                            strokeWidth = 1.4f,
+                            cap = StrokeCap.Round
+                        )
+                    }
+                    prev = point
+                }
+            }
+            for (col in 0 until boardSize) {
+                var prev: Offset? = null
+                for (row in 0 until boardSize) {
+                    val (fx, fy) = intersectionFraction(row, col)
+                    val point = Offset(size.width * fx, size.height * fy)
+                    prev?.let {
+                        drawLine(
+                            color = Color(0xFF1F1A1B),
+                            start = it,
+                            end = point,
+                            strokeWidth = 1.4f,
+                            cap = StrokeCap.Round
+                        )
+                    }
+                    prev = point
+                }
+            }
+            for (row in 0 until boardSize) {
+                for (col in 0 until boardSize) {
+                    val (fx, fy) = intersectionFraction(row, col)
+                    val point = Offset(size.width * fx, size.height * fy)
+                    drawCircle(color = Color(0xFF1F1A1B), radius = 2.2f, center = point)
+                }
+            }
             drawCircle(color = Color(0xFF2D2527), radius = radius * 0.995f, center = center, style = Stroke(width = 4f))
         }
 
-        val radiusFraction = 0.46f
-        val centerIndex = (boardSize - 1) / 2f
         repeat(boardSize) { row ->
             repeat(boardSize) { col ->
                 val position = Position(row, col)
@@ -436,45 +438,38 @@ private fun CircularBoard(
                 val isTarget = selectedTarget == position
                 val isLegalTarget = position in legalTargets
 
-                // Map board indices to circular coordinates.
-                val dx = (col - centerIndex) / centerIndex
-                val dy = (row - centerIndex) / centerIndex
-                val r = kotlin.math.sqrt(dx * dx + dy * dy)
-                if (r > 1.02f) return@repeat
-                val angle = kotlin.math.atan2(dy, dx)
-                val projectedX = 0.5f + cos(angle).toFloat() * (r * radiusFraction)
-                val projectedY = 0.5f + sin(angle).toFloat() * (r * radiusFraction)
+                val (fx, fy) = intersectionFraction(row, col)
+                val x = boardSizeDp * fx
+                val y = boardSizeDp * fy
 
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .wrapContentSize(Alignment.TopStart)
+                        .offset(x = x - pointTouchRadius, y = y - pointTouchRadius)
+                        .size(pointTouchRadius * 2)
+                        .background(
+                            when {
+                                isSource -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
+                                isTarget -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)
+                                isLegalTarget -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                                else -> Color.Transparent
+                            },
+                            shape = androidx.compose.foundation.shape.CircleShape
+                        )
+                        .clickable { onTileClick(position) },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .padding(
-                                start = boardSizeDp * projectedX - 13.dp,
-                                top = boardSizeDp * projectedY - 13.dp
-                            )
-                            .size(26.dp)
-                            .background(
-                                when {
-                                    isSource -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
-                                    isTarget -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)
-                                    isLegalTarget -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
-                                    else -> Color.Transparent
-                                }
-                            )
-                            .clickable { onTileClick(position) },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (token.isNotEmpty()) {
-                            Text(
-                                text = token,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (token.startsWith("A")) Color(0xFF7A1113) else Color(0xFF15264A)
-                            )
-                        }
+                    if (token.isNotEmpty()) {
+                        Text(
+                            text = token,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (token.startsWith("A")) Color(0xFF7A1113) else Color(0xFF15264A)
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(pointVisualRadius * 2)
+                                .background(Color(0xFF1F1A1B), shape = androidx.compose.foundation.shape.CircleShape)
+                        )
                     }
                 }
             }
