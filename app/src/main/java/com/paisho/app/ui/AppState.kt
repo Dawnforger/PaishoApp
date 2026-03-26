@@ -1,0 +1,61 @@
+package com.paisho.app.ui
+
+import com.paisho.core.game.AccentType
+import com.paisho.core.game.GameEndReason
+import com.paisho.core.game.GamePhase
+import com.paisho.core.game.Player
+import com.paisho.core.game.Position
+import com.paisho.core.game.TileType
+
+enum class AppScreen {
+    Home,
+    NewGameSetup,
+    Game,
+    ExistingGames,
+    Settings,
+}
+
+enum class DrawerSection {
+    Game,
+    ExistingGames,
+    Settings,
+}
+
+data class ExistingGameSummary(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+)
+
+data class NewGameSetupState(
+    val openingBasicType: TileType = TileType.ROSE,
+    val selectedAccents: List<AccentType> = listOf(
+        AccentType.ROCK,
+        AccentType.WHEEL,
+        AccentType.KNOTWEED,
+        AccentType.BOAT,
+    ),
+) {
+    val canStart: Boolean
+        get() = openingBasicType.isBasic && selectedAccents.size == 4
+}
+
+data class GameUiState(
+    val boardSize: Int = 9,
+    val currentPlayer: Player = Player.HUMAN,
+    val selectedSource: Position? = null,
+    val selectedTarget: Position? = null,
+    val legalTargets: Set<Position> = emptySet(),
+    val selectedTileType: TileType? = TileType.CHRYSANTHEMUM,
+    val boardSnapshot: Map<Position, String> = emptyMap(),
+    val eventLog: List<String> = listOf("Welcome to Pai Sho."),
+    val isGameOver: Boolean = false,
+    val isDraw: Boolean = false,
+    val winner: Player? = null,
+    val endReason: GameEndReason? = null,
+    val phase: GamePhase = GamePhase.PLAYING,
+    val setupState: NewGameSetupState = NewGameSetupState(),
+    val existingGames: List<ExistingGameSummary> = emptyList(),
+    val appScreen: AppScreen = AppScreen.Home,
+    val drawerSection: DrawerSection = DrawerSection.Game,
+)

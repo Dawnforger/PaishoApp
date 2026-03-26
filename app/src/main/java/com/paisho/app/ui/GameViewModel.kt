@@ -2,6 +2,7 @@ package com.paisho.app.ui
 
 import androidx.lifecycle.ViewModel
 import com.paisho.core.ai.SimpleAi
+import com.paisho.core.game.AccentType
 import com.paisho.core.game.GamePhase
 import com.paisho.core.game.BonusAction
 import com.paisho.core.game.GameEndReason
@@ -9,6 +10,7 @@ import com.paisho.core.game.GameState
 import com.paisho.core.game.Move
 import com.paisho.core.game.Player
 import com.paisho.core.game.Position
+import com.paisho.core.game.RulesConfig
 import com.paisho.core.game.Rules
 import com.paisho.core.game.TileType
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,36 +18,95 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
-data class GameUiState(
-    val boardSize: Int = 9,
-    val currentPlayer: Player = Player.HUMAN,
-    val selectedSource: Position? = null,
-    val selectedTarget: Position? = null,
-    val legalTargets: Set<Position> = emptySet(),
-    val selectedTileType: TileType? = TileType.CHRYSANTHEMUM,
-    val boardSnapshot: Map<Position, String> = emptyMap(),
-    val eventLog: List<String> = listOf("Welcome to Pai Sho MVP."),
-    val isGameOver: Boolean = false,
-    val isDraw: Boolean = false,
-    val winner: Player? = null,
-    val endReason: GameEndReason? = null,
-    val phase: GamePhase = GamePhase.PLAYING,
-)
-
 class GameViewModel : ViewModel() {
     private val ai = SimpleAi()
-    private var state: GameState = GameState.initial()
+    private var state: GameState = GameState.initial(defaultRulesConfig())
     private var pendingBonus: BonusAction? = null
     private val _uiState = MutableStateFlow(
         state.toUiState(
             log = listOf("Skud Pai Sho v0.0.01 - full rules engine enabled."),
-            selectedTileType = TileType.CHRYSANTHEMUM,
+            selectedTileType = TileType.ROSE,
             selectedSource = null,
             selectedTarget = null,
             legalTargets = emptySet(),
+            setupState = NewGameSetupState(),
+            existingGames = emptyList(),
+            appScreen = AppScreen.Home,
+            drawerSection = DrawerSection.Game,
         )
     )
     val uiState: StateFlow<GameUiState> = _uiState.asStateFlow()
+
+    fun openHome() {
+        _uiState.update { it.copy(appScreen = AppScreen.Home, drawerSection = DrawerSection.Game) }
+    }
+
+    fun openExistingGames() {
+        _uiState.update { it.copy(appScreen = AppScreen.ExistingGames, drawerSection = DrawerSection.ExistingGames) }
+    }
+
+    fun openSettings() {
+        _uiState.update { it.copy(appScreen = AppScreen.Settings, drawerSection = DrawerSection.Settings) }
+    }
+
+    fun startNewGameFlow() {
+        _uiState.update {
+            it.copy(
+                appScreen = AppScreen.NewGameSetup,
+                drawerSection = DrawerSection.Game,
+                setupState = NewGameSetupState()
+            )
+        }
+    }
+
+    fun toggleOpeningTile(type: TileType) {
+        if (!type.isBasic) return
+        _uiState.update { ui ->
+            ui.copy(setupState = ui.setupState.copy(openingBasicType = type))
+        }
+    }
+
+    fun toggleAccentSelection(type: AccentType) {
+        _uiState.update { ui ->
+            val selected = ui.setupState.selectedAccents.toMutableList()
+            if (type in selected) {
+                selected.remove(type)
+            } else if (selected.size < 4) {
+                selected.add(type)
+            }
+            ui.copy(setupState = ui.setupState.copy(selectedAccents = selected))
+        }
+    }
+
+    fun createNewGameFromSetup() {
+        val setup = _uiState.value.setupState
+        if (setup.selectedAccents.size != 4) {
+            appendLog("Select exactly 4 accents to start.")
+            return
+        }
+        val config = defaultRulesConfig().copy(
+            openingBasicType = setup.openingBasicType,
+            humanAccentLoadout = setup.selectedAccents,
+            aiAccentLoadout = setup.selectedAccents,
+        )
+        state = GameState.initial(config)
+        pendingBonus = null
+        _uiState.value = state.toUiState(
+            log = listOf(
+                "New game started.",
+                "Opening tile: ${setup.openingBasicType.name}.",
+                "Selected accents: ${setup.selectedAccents.joinToString { it.name }}."
+            ),
+            selectedTileType = setup.openingBasicType,
+            selectedSource = null,
+            selectedTarget = null,
+            legalTargets = emptySet(),
+            setupState = setup,
+            existingGames = addExistingGameRecord(_uiState.value.existingGames, setup),
+            appScreen = AppScreen.Game,
+            drawerSection = DrawerSection.Game,
+        )
+    }
 
     fun onPositionSelected(position: Position) {
         if (state.phase == GamePhase.FINISHED) return
@@ -129,14 +190,18 @@ class GameViewModel : ViewModel() {
     }
 
     fun resetGame() {
-        state = GameState.initial()
+        state = GameState.initial(defaultRulesConfig())
         pendingBonus = null
         _uiState.value = state.toUiState(
             log = listOf("Game reset."),
-            selectedTileType = TileType.CHRYSANTHEMUM,
+            selectedTileType = TileType.ROSE,
             selectedSource = null,
             selectedTarget = null,
             legalTargets = emptySet(),
+            setupState = _uiState.value.setupState,
+            existingGames = _uiState.value.existingGames,
+            appScreen = AppScreen.Game,
+            drawerSection = DrawerSection.Game,
         )
     }
 
@@ -145,13 +210,17 @@ class GameViewModel : ViewModel() {
         val source = if (clearSelection) null else _uiState.value.selectedSource
         val target = if (clearSelection) null else _uiState.value.selectedTarget
         val legalTargets = if (clearSelection) emptySet() else _uiState.value.legalTargets
-        val selectedTileType = _uiState.value.selectedTileType ?: TileType.CHRYSANTHEMUM
+        val selectedTileType = _uiState.value.selectedTileType ?: TileType.ROSE
         _uiState.value = state.toUiState(
             log = priorLog,
             selectedTileType = selectedTileType,
             selectedSource = source,
             selectedTarget = target,
             legalTargets = legalTargets,
+            setupState = _uiState.value.setupState,
+            existingGames = _uiState.value.existingGames,
+            appScreen = _uiState.value.appScreen,
+            drawerSection = _uiState.value.drawerSection,
         )
     }
 
@@ -165,6 +234,10 @@ class GameViewModel : ViewModel() {
         selectedSource: Position?,
         selectedTarget: Position?,
         legalTargets: Set<Position>,
+        setupState: NewGameSetupState,
+        existingGames: List<ExistingGameSummary>,
+        appScreen: AppScreen,
+        drawerSection: DrawerSection,
     ): GameUiState = GameUiState(
         boardSize = rules.boardSize,
         currentPlayer = currentPlayer,
@@ -179,5 +252,28 @@ class GameViewModel : ViewModel() {
         winner = winner,
         endReason = endReason,
         phase = phase,
+        setupState = setupState,
+        existingGames = existingGames,
+        appScreen = appScreen,
+        drawerSection = drawerSection,
     )
+
+    private fun defaultRulesConfig(): RulesConfig = RulesConfig(
+        openingBasicType = TileType.ROSE,
+        humanAccentLoadout = listOf(AccentType.ROCK, AccentType.WHEEL, AccentType.KNOTWEED, AccentType.BOAT),
+        aiAccentLoadout = listOf(AccentType.ROCK, AccentType.WHEEL, AccentType.KNOTWEED, AccentType.BOAT),
+    )
+
+    private fun addExistingGameRecord(
+        existing: List<ExistingGameSummary>,
+        setup: NewGameSetupState,
+    ): List<ExistingGameSummary> {
+        val next = ExistingGameSummary(
+            id = "game-${System.currentTimeMillis()}",
+            title = "Game ${existing.size + 1}",
+            subtitle = "Opening ${setup.openingBasicType.shortName} | ${setup.selectedAccents.joinToString("/") { it.shortName }}",
+        )
+        return (listOf(next) + existing).take(10)
+    }
 }
+
