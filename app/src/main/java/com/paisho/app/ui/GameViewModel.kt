@@ -3,6 +3,8 @@ package com.paisho.app.ui
 import androidx.lifecycle.ViewModel
 import com.paisho.core.ai.SimpleAi
 import com.paisho.core.game.GamePhase
+import com.paisho.core.game.BonusAction
+import com.paisho.core.game.GameEndReason
 import com.paisho.core.game.GameState
 import com.paisho.core.game.Move
 import com.paisho.core.game.Player
@@ -20,21 +22,24 @@ data class GameUiState(
     val selectedSource: Position? = null,
     val selectedTarget: Position? = null,
     val legalTargets: Set<Position> = emptySet(),
-    val selectedTileType: TileType? = TileType.ROSE,
+    val selectedTileType: TileType? = TileType.CHRYSANTHEMUM,
     val boardSnapshot: Map<Position, String> = emptyMap(),
     val eventLog: List<String> = listOf("Welcome to Pai Sho MVP."),
     val isGameOver: Boolean = false,
+    val isDraw: Boolean = false,
     val winner: Player? = null,
-    val phase: GamePhase = GamePhase.PLANTING,
+    val endReason: GameEndReason? = null,
+    val phase: GamePhase = GamePhase.PLAYING,
 )
 
 class GameViewModel : ViewModel() {
     private val ai = SimpleAi()
     private var state: GameState = GameState.initial()
+    private var pendingBonus: BonusAction? = null
     private val _uiState = MutableStateFlow(
         state.toUiState(
-            log = listOf("Welcome to Pai Sho MVP."),
-            selectedTileType = TileType.ROSE,
+            log = listOf("Skud Pai Sho v0.0.01 - full rules engine enabled."),
+            selectedTileType = TileType.CHRYSANTHEMUM,
             selectedSource = null,
             selectedTarget = null,
             legalTargets = emptySet(),
@@ -43,26 +48,19 @@ class GameViewModel : ViewModel() {
     val uiState: StateFlow<GameUiState> = _uiState.asStateFlow()
 
     fun onPositionSelected(position: Position) {
-        when (state.phase) {
-            GamePhase.PLANTING -> {
-                _uiState.update { it.copy(selectedTarget = position) }
+        if (state.phase == GamePhase.FINISHED) return
+        val tappedFlower = state.flowerAt(position)
+        if (tappedFlower?.owner == Player.HUMAN) {
+            val legalTargets = Rules.legalMovesFrom(state, position).map { it.target }.toSet()
+            _uiState.update {
+                it.copy(
+                    selectedSource = position,
+                    selectedTarget = null,
+                    legalTargets = legalTargets,
+                )
             }
-            GamePhase.MOVEMENT -> {
-                val tappedTile = state.tileAt(position)
-                if (tappedTile?.owner == Player.HUMAN) {
-                    val legalTargets = Rules.legalMovesFrom(state, position).map { it.target }.toSet()
-                    _uiState.update {
-                        it.copy(
-                            selectedSource = position,
-                            selectedTarget = null,
-                            legalTargets = legalTargets,
-                        )
-                    }
-                } else if (_uiState.value.selectedSource != null) {
-                    _uiState.update { it.copy(selectedTarget = position) }
-                }
-            }
-            GamePhase.FINISHED -> Unit
+        } else {
+            _uiState.update { it.copy(selectedTarget = position) }
         }
     }
 
@@ -71,22 +69,36 @@ class GameViewModel : ViewModel() {
     }
 
     fun performSelectedMoveOrPlant() {
-        if (state.winner != null || state.currentPlayer != Player.HUMAN) return
+        if (state.winner != null || state.isDraw || state.currentPlayer != Player.HUMAN) return
         val ui = _uiState.value
+        val legalMoves = Rules.legalMoves(state)
 
-        val move = when (state.phase) {
-            GamePhase.PLANTING -> {
-                val selectedTarget = ui.selectedTarget ?: return
-                val type = ui.selectedTileType ?: TileType.ROSE
-                Move.Plant(type, selectedTarget)
+        val move = if (ui.selectedSource != null) {
+            val source = ui.selectedSource
+            val target = ui.selectedTarget ?: return
+            val tileId = state.flowerAt(source)?.id ?: return
+            val candidates = legalMoves.filterIsInstance<Move.Slide>()
+                .filter { it.tileId == tileId && it.target == target }
+            if (candidates.isEmpty()) {
+                appendLog("No legal arrange move from source to target.")
+                return
             }
-            GamePhase.MOVEMENT -> {
-                val source = ui.selectedSource ?: return
-                val target = ui.selectedTarget ?: return
-                val tileId = state.tileAt(source)?.id ?: return
-                Move.Slide(tileId = tileId, target = target)
+            val selected = when {
+                candidates.any { it.bonus == pendingBonus } -> candidates.first { it.bonus == pendingBonus }
+                candidates.any { it.bonus == null } -> candidates.first { it.bonus == null }
+                else -> candidates.first()
             }
-            GamePhase.FINISHED -> return
+            pendingBonus = selected.bonus
+            selected
+        } else {
+            val gate = ui.selectedTarget ?: return
+            val type = ui.selectedTileType ?: TileType.CHRYSANTHEMUM
+            val plant = Move.Plant(type, gate)
+            if (plant !in legalMoves) {
+                appendLog("Plant is not legal at that gate.")
+                return
+            }
+            plant
         }
 
         tryApplyHumanMove(move)
@@ -101,9 +113,10 @@ class GameViewModel : ViewModel() {
 
         state = Rules.applyMove(state, move)
         appendLog("Human played: $move")
+        pendingBonus = null
         publishState(clearSelection = true)
 
-        if (state.winner == null && state.currentPlayer == Player.AI) {
+        if (state.winner == null && !state.isDraw && state.currentPlayer == Player.AI) {
             val aiMove = ai.chooseMove(state)
             if (aiMove != null) {
                 state = Rules.applyMove(state, aiMove)
@@ -117,9 +130,10 @@ class GameViewModel : ViewModel() {
 
     fun resetGame() {
         state = GameState.initial()
+        pendingBonus = null
         _uiState.value = state.toUiState(
             log = listOf("Game reset."),
-            selectedTileType = TileType.ROSE,
+            selectedTileType = TileType.CHRYSANTHEMUM,
             selectedSource = null,
             selectedTarget = null,
             legalTargets = emptySet(),
@@ -131,7 +145,7 @@ class GameViewModel : ViewModel() {
         val source = if (clearSelection) null else _uiState.value.selectedSource
         val target = if (clearSelection) null else _uiState.value.selectedTarget
         val legalTargets = if (clearSelection) emptySet() else _uiState.value.legalTargets
-        val selectedTileType = _uiState.value.selectedTileType ?: TileType.ROSE
+        val selectedTileType = _uiState.value.selectedTileType ?: TileType.CHRYSANTHEMUM
         _uiState.value = state.toUiState(
             log = priorLog,
             selectedTileType = selectedTileType,
@@ -160,8 +174,10 @@ class GameViewModel : ViewModel() {
         selectedTileType = selectedTileType,
         boardSnapshot = boardSnapshot(),
         eventLog = log,
-        isGameOver = winner != null || phase == GamePhase.FINISHED,
+        isGameOver = winner != null || isDraw || phase == GamePhase.FINISHED,
+        isDraw = isDraw,
         winner = winner,
+        endReason = endReason,
         phase = phase,
     )
 }

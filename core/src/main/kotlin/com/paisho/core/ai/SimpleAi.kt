@@ -30,10 +30,15 @@ class SimpleAi(
         }
 
         val next = Rules.applyMove(state, move)
-        val aiCount = next.tiles.count { it.owner == Player.AI }
-        val humanCount = next.tiles.count { it.owner == Player.HUMAN }
+        val aiCount = next.flowers.count { it.owner == Player.AI }
+        val humanCount = next.flowers.count { it.owner == Player.HUMAN }
+        val aiHarmony = Rules.computeHarmonies(next).count { it.owner == Player.AI }
+        val humanHarmony = Rules.computeHarmonies(next).count { it.owner == Player.HUMAN }
         score += aiCount * 3
         score -= humanCount * 2
+        score += aiHarmony * 4
+        score -= humanHarmony * 3
+        if (Rules.hasHarmonyRing(next, Player.AI)) score += 20_000
         if (next.winner == Player.AI) score += 10_000
         return score
     }

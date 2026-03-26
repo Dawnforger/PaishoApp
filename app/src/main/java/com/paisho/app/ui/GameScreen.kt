@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.paisho.core.game.GamePhase
+import com.paisho.core.game.GameEndReason
 import com.paisho.core.game.Player
 import com.paisho.core.game.Position
 import com.paisho.core.game.TileType
@@ -48,20 +49,21 @@ fun GameScreen(viewModel: GameViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text(
-            text = "Pai Sho MVP (Human vs AI)",
+            text = "Skud Pai Sho v0.0.01",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
 
         Text(
             text = if (state.isGameOver) {
-                when (state.winner) {
-                    null -> "Game over: draw."
-                    Player.HUMAN -> "Game over: you win!"
-                    Player.AI -> "Game over: AI wins."
+                when {
+                    state.isDraw -> "Game over: draw (${state.endReason?.name ?: "resolved"})."
+                    state.winner == Player.HUMAN -> "Game over: you win (${state.endReason?.name ?: "resolved"})."
+                    state.winner == Player.AI -> "Game over: AI wins (${state.endReason?.name ?: "resolved"})."
+                    else -> "Game over."
                 }
             } else {
-                "Turn: ${if (state.currentPlayer == Player.HUMAN) "Human" else "AI"} | Phase: ${state.phase.name.lowercase()}"
+                "Turn: ${if (state.currentPlayer == Player.HUMAN) "Human" else "AI"} | Rules: full parity core"
             }
         )
 
@@ -75,42 +77,51 @@ fun GameScreen(viewModel: GameViewModel) {
         )
 
         Text(
-            text = when (state.phase) {
-                GamePhase.PLANTING -> "Plant tile: ${state.selectedTileType?.name ?: "none"} | Target: ${state.selectedTarget?.let { "(${it.row}, ${it.col})" } ?: "none"}"
-                GamePhase.MOVEMENT -> "Source: ${state.selectedSource?.let { "(${it.row}, ${it.col})" } ?: "none"} | Target: ${state.selectedTarget?.let { "(${it.row}, ${it.col})" } ?: "none"}"
-                GamePhase.FINISHED -> "Game finished."
+            text = when {
+                state.phase == GamePhase.FINISHED -> when (state.endReason) {
+                    GameEndReason.HARMONY_RING -> "Victory by Harmony Ring."
+                    GameEndReason.LAST_BASIC_PLAYED -> "End by last Basic tile and midline harmonies."
+                    null -> "Game finished."
+                }
+                state.selectedSource != null -> "Arrange source: (${state.selectedSource.row}, ${state.selectedSource.col}) | target: ${state.selectedTarget?.let { "(${it.row}, ${it.col})" } ?: "none"}"
+                else -> "Plant tile: ${state.selectedTileType?.name ?: "none"} | Gate: ${state.selectedTarget?.let { "(${it.row}, ${it.col})" } ?: "none"}"
             },
             style = MaterialTheme.typography.bodyMedium
         )
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TilePickerButton(
-                label = "Rose",
+                label = "R3 Rose",
                 selected = state.selectedTileType == TileType.ROSE,
                 onClick = { viewModel.selectTileToPlant(TileType.ROSE) }
             )
             TilePickerButton(
-                label = "Jasmine",
-                selected = state.selectedTileType == TileType.JASMINE,
-                onClick = { viewModel.selectTileToPlant(TileType.JASMINE) }
+                label = "R4 Chrys",
+                selected = state.selectedTileType == TileType.CHRYSANTHEMUM,
+                onClick = { viewModel.selectTileToPlant(TileType.CHRYSANTHEMUM) }
             )
             TilePickerButton(
-                label = "Lily",
-                selected = state.selectedTileType == TileType.LILY,
-                onClick = { viewModel.selectTileToPlant(TileType.LILY) }
+                label = "R5 Rhodo",
+                selected = state.selectedTileType == TileType.RHODODENDRON,
+                onClick = { viewModel.selectTileToPlant(TileType.RHODODENDRON) }
             )
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TilePickerButton(
-                label = "White Lotus",
-                selected = state.selectedTileType == TileType.WHITE_LOTUS,
-                onClick = { viewModel.selectTileToPlant(TileType.WHITE_LOTUS) }
+                label = "W3 Jasmine",
+                selected = state.selectedTileType == TileType.JASMINE,
+                onClick = { viewModel.selectTileToPlant(TileType.JASMINE) }
             )
             TilePickerButton(
-                label = "Orchid",
-                selected = state.selectedTileType == TileType.ORCHID,
-                onClick = { viewModel.selectTileToPlant(TileType.ORCHID) }
+                label = "W4 Lily",
+                selected = state.selectedTileType == TileType.LILY,
+                onClick = { viewModel.selectTileToPlant(TileType.LILY) }
+            )
+            TilePickerButton(
+                label = "W5 Jade",
+                selected = state.selectedTileType == TileType.WHITE_JADE,
+                onClick = { viewModel.selectTileToPlant(TileType.WHITE_JADE) }
             )
         }
 
