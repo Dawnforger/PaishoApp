@@ -12,6 +12,7 @@
 - Added local AI move selection over legal move space.
 - Added unit tests for core legality and rule scenarios.
 - Added first release version metadata (`v0.0.01`).
+- Added Android SDK bootstrap + successful `:app:assembleDebug` verification in cloud environment.
 
 ## Versioning policy
 
