@@ -1,5 +1,11 @@
 # Release Notes
 
+## v0.0.03
+
+- Fixed circular board overlay alignment issues so marker/token placement stays correctly on-grid.
+- Sidebar drawer is now menu-button-only (swipe gesture disabled).
+- Published updated signed APK/AAB artifacts.
+
 ## v0.0.02
 
 - Tightened board interaction: taps now snap to legal playable **grid intersections only**.
