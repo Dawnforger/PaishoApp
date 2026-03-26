@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -41,6 +42,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -59,7 +61,10 @@ import com.paisho.core.game.GamePhase
 import com.paisho.core.game.Player
 import com.paisho.core.game.Position
 import com.paisho.core.game.TileType
+import androidx.compose.foundation.gestures.detectTapGestures
 import kotlin.math.min
+import kotlin.math.sqrt
+import kotlin.math.sqrt
 
 @Composable
 fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
@@ -342,9 +347,11 @@ private fun CircularBoard(
     cells: Map<Position, String>
 ) {
     val boardSizeDp = 360.dp
-    val pointTouchRadius = 14.dp
+    val pointTouchRadius = 13.dp
     val pointVisualRadius = 3.dp
     val latticeRadiusFraction = 0.44f
+    val boardRadiusFraction = 0.48f
+    val playableRadiusFraction = 0.96f
 
     fun intersectionFraction(row: Int, col: Int): Pair<Float, Float> {
         val nx = if (boardSize <= 1) 0f else (col.toFloat() / (boardSize - 1)) * 2f - 1f
@@ -352,11 +359,47 @@ private fun CircularBoard(
         return (0.5f + nx * latticeRadiusFraction) to (0.5f + ny * latticeRadiusFraction)
     }
 
-    Box(modifier = Modifier.size(boardSizeDp), contentAlignment = Alignment.Center) {
+    Box(
+        modifier = Modifier
+            .size(boardSizeDp)
+            .pointerInput(boardSize, legalTargets) {
+                detectTapGestures { tapOffset ->
+                    val sizePx = min(size.width, size.height)
+                    val center = Offset(size.width / 2f, size.height / 2f)
+                    val boardRadius = sizePx * boardRadiusFraction
+                    val playableRadius = boardRadius * playableRadiusFraction
+                    val dx = tapOffset.x - center.x
+                    val dy = tapOffset.y - center.y
+                    if (dx * dx + dy * dy > playableRadius * playableRadius) return@detectTapGestures
+
+                    var closest: Position? = null
+                    var closestDistance = Float.MAX_VALUE
+                    for (row in 0 until boardSize) {
+                        for (col in 0 until boardSize) {
+                            val (fx, fy) = intersectionFraction(row, col)
+                            val p = Offset(size.width * fx, size.height * fy)
+                            val px = tapOffset.x - p.x
+                            val py = tapOffset.y - p.y
+                            val d = sqrt(px * px + py * py)
+                            if (d < closestDistance) {
+                                closestDistance = d
+                                closest = Position(row, col)
+                            }
+                        }
+                    }
+                    // Tight snapping: only accept taps close to a legal intersection marker.
+                    val snapRadiusPx = (sizePx / boardSize) * 0.32f
+                    if (closest != null && closestDistance <= snapRadiusPx) {
+                        onTileClick(closest)
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
         Canvas(modifier = Modifier.matchParentSize()) {
             val sizePx = min(size.width, size.height)
             val center = Offset(size.width / 2f, size.height / 2f)
-            val radius = sizePx * 0.48f
+            val radius = sizePx * boardRadiusFraction
 
             drawCircle(color = Color(0xFF3A3638), radius = radius, center = center, style = Fill)
             drawCircle(color = Color(0xFFD8D0C9), radius = radius * 0.965f, center = center, style = Fill)
@@ -454,8 +497,7 @@ private fun CircularBoard(
                                 else -> Color.Transparent
                             },
                             shape = androidx.compose.foundation.shape.CircleShape
-                        )
-                        .clickable { onTileClick(position) },
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     if (token.isNotEmpty()) {
