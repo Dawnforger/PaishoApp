@@ -69,12 +69,29 @@ class GameViewModel : ViewModel() {
     fun toggleAccentSelection(type: AccentType) {
         _uiState.update { ui ->
             val selected = ui.setupState.selectedAccents.toMutableList()
-            if (type in selected) {
-                selected.remove(type)
-            } else if (selected.size < 4) {
-                selected.add(type)
+            val currentCount = selected.count { it == type }
+            when {
+                currentCount >= 2 -> {
+                    // Already at max for this accent type; ignore add.
+                    return@update ui
+                }
+                selected.size < 4 -> selected.add(type)
+                else -> return@update ui
             }
             ui.copy(setupState = ui.setupState.copy(selectedAccents = selected))
+        }
+    }
+
+    fun removeAccentSelection(type: AccentType) {
+        _uiState.update { ui ->
+            val selected = ui.setupState.selectedAccents.toMutableList()
+            val idx = selected.indexOf(type)
+            if (idx >= 0) {
+                selected.removeAt(idx)
+                ui.copy(setupState = ui.setupState.copy(selectedAccents = selected))
+            } else {
+                ui
+            }
         }
     }
 
@@ -82,6 +99,10 @@ class GameViewModel : ViewModel() {
         val setup = _uiState.value.setupState
         if (setup.selectedAccents.size != 4) {
             appendLog("Select exactly 4 accents to start.")
+            return
+        }
+        if (AccentType.entries.any { type -> setup.selectedAccents.count { it == type } > 2 }) {
+            appendLog("No accent type can be selected more than twice.")
             return
         }
         val config = defaultRulesConfig().copy(

@@ -29,15 +29,12 @@ data class ExistingGameSummary(
 
 data class NewGameSetupState(
     val openingBasicType: TileType = TileType.ROSE,
-    val selectedAccents: List<AccentType> = listOf(
-        AccentType.ROCK,
-        AccentType.WHEEL,
-        AccentType.KNOTWEED,
-        AccentType.BOAT,
-    ),
+    val selectedAccents: List<AccentType> = emptyList(),
 ) {
     val canStart: Boolean
-        get() = openingBasicType.isBasic && selectedAccents.size == 4
+        get() = openingBasicType.isBasic &&
+            selectedAccents.size == 4 &&
+            AccentType.entries.all { type -> selectedAccents.count { it == type } <= 2 }
 }
 
 data class GameUiState(

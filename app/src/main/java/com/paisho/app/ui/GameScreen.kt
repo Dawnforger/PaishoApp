@@ -64,7 +64,6 @@ import com.paisho.core.game.TileType
 import androidx.compose.foundation.gestures.detectTapGestures
 import kotlin.math.min
 import kotlin.math.sqrt
-import kotlin.math.sqrt
 
 @Composable
 fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
@@ -194,17 +193,18 @@ private fun NewGameSetupScreen(
             }
         }
         HorizontalDivider()
-        Text("2) Choose exactly 4 Accent tiles", style = MaterialTheme.typography.titleMedium)
+        Text("2) Choose exactly 4 Accent tiles (max 2 of each)", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             accentChoices.forEach { accent ->
+                val count = setup.selectedAccents.count { it == accent }
                 TextButton(onClick = { onAccentToggled(accent) }) {
-                    Text(if (accent in setup.selectedAccents) "[${accent.shortName}]" else accent.shortName)
+                    Text("${accent.shortName} ($count/2)")
                 }
             }
         }
         Text("Selected: ${setup.selectedAccents.size}/4")
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onCreateGame, enabled = setup.selectedAccents.size == 4) {
+            Button(onClick = onCreateGame, enabled = setup.canStart) {
                 Text("Create Game")
             }
             TextButton(onClick = onBack) { Text("Back") }
@@ -359,6 +359,15 @@ private fun CircularBoard(
         return (0.5f + nx * latticeRadiusFraction) to (0.5f + ny * latticeRadiusFraction)
     }
 
+    val allPoints = buildList {
+        for (row in 0 until boardSize) {
+            for (col in 0 until boardSize) {
+                add(Position(row, col))
+            }
+        }
+    }
+    val interactivePoints = (legalTargets + selectedSource + selectedTarget).filterNotNull().toSet()
+
     Box(
         modifier = Modifier
             .size(boardSizeDp)
@@ -374,17 +383,15 @@ private fun CircularBoard(
 
                     var closest: Position? = null
                     var closestDistance = Float.MAX_VALUE
-                    for (row in 0 until boardSize) {
-                        for (col in 0 until boardSize) {
-                            val (fx, fy) = intersectionFraction(row, col)
-                            val p = Offset(size.width * fx, size.height * fy)
-                            val px = tapOffset.x - p.x
-                            val py = tapOffset.y - p.y
-                            val d = sqrt(px * px + py * py)
-                            if (d < closestDistance) {
-                                closestDistance = d
-                                closest = Position(row, col)
-                            }
+                    for (point in allPoints) {
+                        val (fx, fy) = intersectionFraction(point.row, point.col)
+                        val p = Offset(size.width * fx, size.height * fy)
+                        val px = tapOffset.x - p.x
+                        val py = tapOffset.y - p.y
+                        val d = sqrt(px * px + py * py)
+                        if (d < closestDistance) {
+                            closestDistance = d
+                            closest = point
                         }
                     }
                     // Tight snapping: only accept taps close to a legal intersection marker.
@@ -463,56 +470,52 @@ private fun CircularBoard(
                     prev = point
                 }
             }
-            for (row in 0 until boardSize) {
-                for (col in 0 until boardSize) {
-                    val (fx, fy) = intersectionFraction(row, col)
-                    val point = Offset(size.width * fx, size.height * fy)
-                    drawCircle(color = Color(0xFF1F1A1B), radius = 2.2f, center = point)
-                }
+            for (point in allPoints) {
+                val (fx, fy) = intersectionFraction(point.row, point.col)
+                val marker = Offset(size.width * fx, size.height * fy)
+                drawCircle(color = Color(0xFF1F1A1B), radius = 2.2f, center = marker)
             }
             drawCircle(color = Color(0xFF2D2527), radius = radius * 0.995f, center = center, style = Stroke(width = 4f))
         }
 
-        repeat(boardSize) { row ->
-            repeat(boardSize) { col ->
-                val position = Position(row, col)
-                val token = cells[position].orEmpty()
-                val isSource = selectedSource == position
-                val isTarget = selectedTarget == position
-                val isLegalTarget = position in legalTargets
+        allPoints.forEach { position ->
+            val token = cells[position].orEmpty()
+            val isSource = selectedSource == position
+            val isTarget = selectedTarget == position
+            val isLegalTarget = position in legalTargets
 
-                val (fx, fy) = intersectionFraction(row, col)
-                val x = boardSizeDp * fx
-                val y = boardSizeDp * fy
+            val (fx, fy) = intersectionFraction(position.row, position.col)
+            val x = boardSizeDp * fx
+            val y = boardSizeDp * fy
 
-                Box(
-                    modifier = Modifier
-                        .offset(x = x - pointTouchRadius, y = y - pointTouchRadius)
-                        .size(pointTouchRadius * 2)
-                        .background(
-                            when {
-                                isSource -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
-                                isTarget -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)
-                                isLegalTarget -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
-                                else -> Color.Transparent
-                            },
-                            shape = androidx.compose.foundation.shape.CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (token.isNotEmpty()) {
-                        Text(
-                            text = token,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (token.startsWith("A")) Color(0xFF7A1113) else Color(0xFF15264A)
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(pointVisualRadius * 2)
-                                .background(Color(0xFF1F1A1B), shape = androidx.compose.foundation.shape.CircleShape)
-                        )
-                    }
+            Box(
+                modifier = Modifier
+                    .offset(x = x - pointTouchRadius, y = y - pointTouchRadius)
+                    .size(pointTouchRadius * 2)
+                    .background(
+                        when {
+                            isSource -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
+                            isTarget -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)
+                            isLegalTarget -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                            position in interactivePoints -> Color(0x22000000)
+                            else -> Color.Transparent
+                        },
+                        shape = androidx.compose.foundation.shape.CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (token.isNotEmpty()) {
+                    Text(
+                        text = token,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (token.startsWith("A")) Color(0xFF7A1113) else Color(0xFF15264A)
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(pointVisualRadius * 2)
+                            .background(Color(0xFF1F1A1B), shape = androidx.compose.foundation.shape.CircleShape)
+                    )
                 }
             }
         }
