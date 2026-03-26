@@ -1,5 +1,11 @@
 # Release Notes
 
+## v0.0.02
+
+- Tightened board interaction: taps now snap to legal playable **grid intersections only**.
+- Added circular board UI refinements and improved start/menu/setup flow scaffolding.
+- Published updated signed APK/AAB artifacts for release.
+
 ## v0.0.01
 
 - Introduced native Android project structure using Kotlin + Jetpack Compose.
