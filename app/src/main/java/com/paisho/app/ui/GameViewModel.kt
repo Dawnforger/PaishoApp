@@ -419,12 +419,13 @@ class GameViewModel : ViewModel() {
         is Move.Plant -> "Plant ${tileCode(type)} at (${target.row}, ${target.col})"
         is Move.Slide -> {
             val from = beforeState.flowers.firstOrNull { it.id == tileId }?.position
+            val moveBonus = bonus
             val base = if (from != null) {
                 "Move (${from.row}, ${from.col}) -> (${target.row}, ${target.col})"
             } else {
                 "Move tile #$tileId -> (${target.row}, ${target.col})"
             }
-            if (bonus != null) "$base + ${bonusLabel(bonus)}" else base
+            if (moveBonus != null) "$base + ${bonusLabel(moveBonus)}" else base
         }
     }
 
