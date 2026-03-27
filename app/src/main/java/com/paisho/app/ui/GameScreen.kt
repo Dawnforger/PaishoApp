@@ -54,6 +54,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
@@ -414,10 +415,12 @@ private fun CircularBoard(
 ) {
     val boardSizeDp = 360.dp
     val pointTouchRadius = 13.dp
+    val pieceRadius = 18.dp
     val pointVisualRadius = 3.dp
     val latticeRadiusFraction = 0.44f
-    val boardRadiusFraction = 0.48f
-    val playableRadiusFraction = 0.96f
+    // Bigger board disk so all legal intersections stay inside the background.
+    val boardRadiusFraction = 0.515f
+    val playableRadiusFraction = 0.985f
 
     fun intersectionFraction(position: Position): Pair<Float, Float> {
         val nx = if (coordinateExtent == 0) 0f else (position.col.toFloat() / coordinateExtent.toFloat())
@@ -469,7 +472,7 @@ private fun CircularBoard(
             val radius = sizePx * boardRadiusFraction
 
             drawCircle(color = Color(0xFF3A3638), radius = radius, center = center, style = Fill)
-            drawCircle(color = Color(0xFFD8D0C9), radius = radius * 0.965f, center = center, style = Fill)
+            drawCircle(color = Color(0xFFD8D0C9), radius = radius * 0.975f, center = center, style = Fill)
 
             // Paint board zones directly from legal coordinate map.
             val cellRadius = maxOf(1.6f, (sizePx / boardSize) * 0.38f)
@@ -537,7 +540,7 @@ private fun CircularBoard(
                 val marker = Offset(size.width * fx, size.height * fy)
                 drawCircle(color = Color(0xFF1F1A1B), radius = 2.2f, center = marker)
             }
-            drawCircle(color = Color(0xFF2D2527), radius = radius * 0.995f, center = center, style = Stroke(width = 4f))
+            drawCircle(color = Color(0xFF2D2527), radius = radius * 0.998f, center = center, style = Stroke(width = 4f))
         }
 
         allPoints.forEach { position ->
@@ -552,6 +555,7 @@ private fun CircularBoard(
             val x = boardSizeDp * fx
             val y = boardSizeDp * fy
 
+            val pieceCode = tokenCodeFromSnapshot(token)
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
@@ -569,16 +573,24 @@ private fun CircularBoard(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                if (token.isNotEmpty()) {
+                if (pieceCode != null) {
                     val isAiPiece = token.startsWith("A")
                     val pieceFill = if (isAiPiece) Color(0xFFB74B4B) else Color(0xFF3B66A6)
                     val pieceStroke = if (isAiPiece) Color(0xFF4A0D0F) else Color(0xFF0F2342)
                     Box(
                         modifier = Modifier
-                            .size(16.dp)
+                            .size(pieceRadius * 2)
                             .background(color = pieceFill, shape = CircleShape)
-                            .border(width = 1.5.dp, color = pieceStroke, shape = CircleShape)
-                    )
+                            .border(width = 1.5.dp, color = pieceStroke, shape = CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = pieceCode,
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
                 }
             }
         }
@@ -686,4 +698,23 @@ private fun accentCode(accent: AccentType): String = when (accent) {
     AccentType.KNOTWEED -> "KW"
     AccentType.WHEEL -> "WH"
     AccentType.ROCK -> "ST"
+}
+
+private fun tokenCodeFromSnapshot(token: String): String? {
+    if (token.length < 3) return null
+    return when (token.drop(1)) {
+        "R3" -> "R3"
+        "R4" -> "R4"
+        "R5" -> "R5"
+        "W3" -> "W3"
+        "W4" -> "W4"
+        "W5" -> "W5"
+        "WL" -> "WL"
+        "OR" -> "OR"
+        "BT" -> "BT"
+        "KN" -> "KW"
+        "WH" -> "WH"
+        "RK" -> "ST"
+        else -> null
+    }
 }
