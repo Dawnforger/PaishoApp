@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +19,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -48,7 +53,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -66,9 +73,12 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import kotlin.math.min
 import kotlin.math.sqrt
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val selectedTile = state.selectedTileType
+    val selectedAccent = state.selectedAccentType
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -263,79 +273,106 @@ private fun SettingsScreen() {
 @Composable
 fun GameScreen(viewModel: GameViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = if (state.isGameOver) {
-                when {
-                    state.isDraw -> "Game over: draw (${state.endReason?.name ?: "resolved"})."
-                    state.winner == Player.HUMAN -> "Game over: you win (${state.endReason?.name ?: "resolved"})."
-                    state.winner == Player.AI -> "Game over: AI wins (${state.endReason?.name ?: "resolved"})."
-                    else -> "Game over."
+        item {
+            Text(
+                text = if (state.isGameOver) {
+                    when {
+                        state.isDraw -> "Game over: draw (${state.endReason?.name ?: "resolved"})."
+                        state.winner == Player.HUMAN -> "Game over: you win (${state.endReason?.name ?: "resolved"})."
+                        state.winner == Player.AI -> "Game over: AI wins (${state.endReason?.name ?: "resolved"})."
+                        else -> "Game over."
+                    }
+                } else {
+                    "Turn: ${if (state.currentPlayer == Player.HUMAN) "Human" else "AI"}"
                 }
-            } else {
-                "Turn: ${if (state.currentPlayer == Player.HUMAN) "Human" else "AI"}"
-            }
-        )
+            )
+        }
 
-        CircularBoard(
-            boardSize = state.boardSize,
-            coordinateExtent = state.coordinateExtent,
-            selectedSource = state.selectedSource,
-            selectedTarget = state.selectedTarget,
-            legalTargets = state.legalTargets,
-            legalPositions = state.legalPositions,
-            zoneByPosition = state.zoneByPosition,
-            onTileClick = viewModel::onPositionSelected,
-            cells = state.boardSnapshot
-        )
-
-        Text(
-            text = when {
-                state.phase == GamePhase.FINISHED -> when (state.endReason) {
-                    GameEndReason.HARMONY_RING -> "Victory by Harmony Ring."
-                    GameEndReason.LAST_BASIC_PLAYED -> "End by last Basic tile and midline harmonies."
-                    GameEndReason.FORCED_DRAW -> "Game ended in a forced draw."
-                    null -> "Game finished."
-                }
-                state.selectedSource != null -> {
-                    val source = state.selectedSource
-                    "Piece selected at (${source?.row}, ${source?.col}). Tap a highlighted intersection to move."
-                }
-                else -> "Plant tile: ${state.selectedTileType?.name ?: "none"} | Gate: ${state.selectedTarget?.let { "(${it.row}, ${it.col})" } ?: "none"}"
-            },
-            style = MaterialTheme.typography.bodyMedium
-        )
-
-        LazyColumn(modifier = Modifier.height(74.dp)) {
-            items(listOf(TileType.ROSE, TileType.CHRYSANTHEMUM, TileType.RHODODENDRON, TileType.JASMINE, TileType.LILY, TileType.WHITE_JADE)) { tile ->
-                TilePickerButton(
-                    label = tile.shortName,
-                    selected = state.selectedTileType == tile,
-                    onClick = { viewModel.selectTileToPlant(tile) }
+        item {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                CircularBoard(
+                    boardSize = state.boardSize,
+                    coordinateExtent = state.coordinateExtent,
+                    selectedSource = state.selectedSource,
+                    selectedTarget = state.selectedTarget,
+                    legalTargets = state.legalTargets,
+                    legalPositions = state.legalPositions,
+                    zoneByPosition = state.zoneByPosition,
+                    onTileClick = viewModel::onPositionSelected,
+                    cells = state.boardSnapshot
                 )
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = viewModel::performSelectedMoveOrPlant, enabled = !state.isGameOver) {
-                Text("Plant on Gate")
-            }
-            Button(onClick = viewModel::resetGame) {
-                Text("Reset")
+        val selectedTile = state.selectedTileType
+        val selectedAccent = state.selectedAccentType
+
+        item {
+            Text(
+                text = when {
+                    state.phase == GamePhase.FINISHED -> when (state.endReason) {
+                        GameEndReason.HARMONY_RING -> "Victory by Harmony Ring."
+                        GameEndReason.LAST_BASIC_PLAYED -> "End by last Basic tile and midline harmonies."
+                        GameEndReason.FORCED_DRAW -> "Game ended in a forced draw."
+                        null -> "Game finished."
+                    }
+                    state.isAwaitingSubmit -> "Turn action staged. Submit to finalize turn or Undo to revert."
+                    state.selectedSource != null -> {
+                        val source = state.selectedSource
+                        "Piece selected at (${source?.row}, ${source?.col}). Tap a highlighted intersection to move."
+                    }
+                    selectedTile != null -> "Tile ${tileCode(selectedTile)} selected. Tap a highlighted legal space."
+                    selectedAccent != null -> "Accent ${accentCode(selectedAccent)} selected. Bonus placement is available after Harmony."
+                    else -> "Select a board piece to move or select a reserve token to plant."
+                },
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+
+        item {
+            ReserveTray(
+                state = state,
+                onFlowerClick = viewModel::selectFlowerReserveTile,
+                onAccentClick = viewModel::selectAccentReserveTile
+            )
+        }
+
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = viewModel::undoTurn,
+                    enabled = state.canUndoTurn && !state.isGameOver
+                ) {
+                    Text("Undo")
+                }
+                Button(
+                    onClick = viewModel::submitTurn,
+                    enabled = state.canSubmitTurn && !state.isGameOver
+                ) {
+                    Text("Submit")
+                }
+                Button(onClick = viewModel::resetGame) {
+                    Text("Reset")
+                }
             }
         }
 
-        Text("Game log", fontWeight = FontWeight.SemiBold)
-        Card(modifier = Modifier.fillMaxWidth()) {
-            LazyColumn(modifier = Modifier.height(160.dp).padding(8.dp)) {
-                items(state.eventLog) { entry ->
-                    Text(text = entry, style = MaterialTheme.typography.bodySmall)
-                    Spacer(modifier = Modifier.height(4.dp))
+        item {
+            Text("Game log", fontWeight = FontWeight.SemiBold)
+        }
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                LazyColumn(modifier = Modifier.height(160.dp).padding(8.dp)) {
+                    items(state.eventLog) { entry ->
+                        Text(text = entry, style = MaterialTheme.typography.bodySmall)
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
                 }
             }
         }
@@ -527,17 +564,105 @@ private fun CircularBoard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TilePickerButton(
-    label: String,
+private fun ReserveTray(
+    state: GameUiState,
+    onFlowerClick: (TileType) -> Unit,
+    onAccentClick: (AccentType) -> Unit
+) {
+    val flowerOrder = listOf(
+        TileType.ROSE, TileType.CHRYSANTHEMUM, TileType.RHODODENDRON,
+        TileType.JASMINE, TileType.LILY, TileType.WHITE_JADE,
+        TileType.WHITE_LOTUS, TileType.ORCHID
+    )
+    val accentOrder = listOf(AccentType.BOAT, AccentType.KNOTWEED, AccentType.WHEEL, AccentType.ROCK)
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Flower tiles", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            flowerOrder.forEach { tile ->
+                val count = state.flowerReserveCounts[tile] ?: 0
+                ReserveToken(
+                    code = tileCode(tile),
+                    count = count,
+                    selected = state.selectedTileType == tile,
+                    enabled = state.canInteract && count > 0,
+                    onClick = { onFlowerClick(tile) }
+                )
+            }
+        }
+
+        Text("Accent tiles", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            accentOrder.forEach { accent ->
+                val count = state.accentReserveCounts[accent] ?: 0
+                ReserveToken(
+                    code = accentCode(accent),
+                    count = count,
+                    selected = state.selectedAccentType == accent,
+                    enabled = state.canInteract && count > 0,
+                    onClick = { onAccentClick(accent) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReserveToken(
+    code: String,
+    count: Int,
     selected: Boolean,
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier,
-        enabled = true
-    ) {
-        Text(if (selected) "[$label]" else label)
+    val fill = when {
+        !enabled -> Color(0xFF7D7D7D)
+        selected -> Color(0xFF2E7D32)
+        else -> Color(0xFF455A64)
     }
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .background(fill, CircleShape)
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) Color(0xFFEAF7EB) else Color(0xFFDFE3E5),
+                shape = CircleShape
+            )
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "$code\n$count",
+            color = Color.White,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.labelSmall
+        )
+    }
+}
+
+private fun tileCode(tile: TileType): String = when (tile) {
+    TileType.ROSE -> "R3"
+    TileType.CHRYSANTHEMUM -> "R4"
+    TileType.RHODODENDRON -> "R5"
+    TileType.JASMINE -> "W3"
+    TileType.LILY -> "W4"
+    TileType.WHITE_JADE -> "W5"
+    TileType.WHITE_LOTUS -> "WL"
+    TileType.ORCHID -> "OR"
+}
+
+private fun accentCode(accent: AccentType): String = when (accent) {
+    AccentType.BOAT -> "BT"
+    AccentType.KNOTWEED -> "KW"
+    AccentType.WHEEL -> "WH"
+    AccentType.ROCK -> "ST"
 }

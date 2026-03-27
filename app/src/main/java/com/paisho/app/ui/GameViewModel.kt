@@ -21,11 +21,15 @@ import kotlinx.coroutines.flow.update
 class GameViewModel : ViewModel() {
     private val ai = SimpleAi()
     private var state: GameState = GameState.initial(defaultRulesConfig())
+    private var turnStartState: GameState = state
+    private var hasPendingTurnChanges: Boolean = false
     private var pendingBonus: BonusAction? = null
     private val _uiState = MutableStateFlow(
         state.toUiState(
             log = listOf("Skud Pai Sho v0.0.04 - full rules engine enabled."),
-            selectedTileType = TileType.ROSE,
+            selectedTileType = null,
+            selectedAccentType = null,
+            isAwaitingSubmit = false,
             selectedSource = null,
             selectedTarget = null,
             legalTargets = emptySet(),
@@ -112,13 +116,17 @@ class GameViewModel : ViewModel() {
         )
         state = GameState.initial(config)
         pendingBonus = null
+        turnStartState = state
+        hasPendingTurnChanges = false
         _uiState.value = state.toUiState(
             log = listOf(
                 "New game started.",
                 "Opening tile: ${setup.openingBasicType.name}.",
                 "Selected accents: ${setup.selectedAccents.joinToString { it.name }}."
             ),
-            selectedTileType = setup.openingBasicType,
+            selectedTileType = null,
+            selectedAccentType = null,
+            isAwaitingSubmit = false,
             selectedSource = null,
             selectedTarget = null,
             legalTargets = emptySet(),
@@ -130,50 +138,93 @@ class GameViewModel : ViewModel() {
     }
 
     fun onPositionSelected(position: Position) {
-        if (state.phase == GamePhase.FINISHED) return
+        if (state.phase == GamePhase.FINISHED || state.currentPlayer != Player.HUMAN) return
         val currentUi = _uiState.value
+        if (!currentUi.canInteract) return
         val tappedFlower = state.flowerAt(position)
-        if (tappedFlower?.owner == Player.HUMAN) {
-            val legalTargets = Rules.legalMovesFrom(state, position).map { it.target }.toSet()
-            _uiState.update {
-                it.copy(
-                    selectedSource = position,
-                    selectedTarget = null,
-                    legalTargets = legalTargets,
-                )
+        val source = currentUi.selectedSource
+        if (source != null) {
+            when {
+                position == source -> clearSelection()
+                position in currentUi.legalTargets -> tryApplySelectedSlide(source = source, target = position)
+                tappedFlower?.owner == Player.HUMAN -> selectSourceFlower(position)
+                else -> _uiState.update { it.copy(selectedTarget = null) }
             }
-        } else {
-            val source = currentUi.selectedSource
-            if (source != null) {
-                if (position in currentUi.legalTargets) {
-                    tryApplySelectedSlide(source = source, target = position)
-                } else if (position == source) {
-                    _uiState.update { it.copy(selectedSource = null, selectedTarget = null, legalTargets = emptySet()) }
-                } else {
-                    _uiState.update { it.copy(selectedTarget = null) }
-                }
-            } else if (position in state.rules.gates) {
-                _uiState.update { it.copy(selectedTarget = position) }
-            }
-        }
-    }
-
-    fun selectTileToPlant(tileType: TileType) {
-        _uiState.update { it.copy(selectedTileType = tileType) }
-    }
-
-    fun performSelectedMoveOrPlant() {
-        if (state.winner != null || state.isDraw || state.currentPlayer != Player.HUMAN) return
-        val ui = _uiState.value
-        val legalMoves = Rules.legalMoves(state)
-        val gate = ui.selectedTarget ?: return
-        val type = ui.selectedTileType ?: TileType.CHRYSANTHEMUM
-        val plant = Move.Plant(type, gate)
-        if (plant !in legalMoves) {
-            appendLog("Plant is not legal at that gate.")
             return
         }
-        tryApplyHumanMove(plant)
+
+        if (tappedFlower?.owner == Player.HUMAN) {
+            selectSourceFlower(position)
+            return
+        }
+
+        val selectedTileType = currentUi.selectedTileType
+        if (selectedTileType != null && position in currentUi.legalTargets) {
+            tryStagePlant(selectedTileType, position)
+            return
+        }
+    }
+
+    fun selectFlowerReserveTile(tileType: TileType) {
+        if (state.currentPlayer != Player.HUMAN || _uiState.value.isAwaitingSubmit) return
+        val reserve = state.reserveFor(Player.HUMAN)
+        val count = if (tileType.isBasic) reserve.basicCount(tileType) else reserve.specialCount(tileType)
+        if (count <= 0) return
+        val legalTargets = legalPlantTargets(tileType)
+        _uiState.update {
+            it.copy(
+                selectedTileType = tileType,
+                selectedAccentType = null,
+                selectedSource = null,
+                selectedTarget = null,
+                legalTargets = legalTargets,
+            )
+        }
+    }
+
+    fun selectAccentReserveTile(accentType: AccentType) {
+        if (state.currentPlayer != Player.HUMAN || _uiState.value.isAwaitingSubmit) return
+        val count = state.reserveFor(Player.HUMAN).accentCount(accentType)
+        if (count <= 0) return
+        _uiState.update {
+            it.copy(
+                selectedAccentType = accentType,
+                selectedTileType = null,
+                selectedSource = null,
+                selectedTarget = null,
+                legalTargets = emptySet(),
+            )
+        }
+        appendLog("Accent tiles are triggered via bonus actions after forming a Harmony.")
+    }
+
+    fun submitTurn() {
+        if (!hasPendingTurnChanges) return
+        if (state.phase != GamePhase.FINISHED && state.winner == null && !state.isDraw && state.currentPlayer == Player.AI) {
+            val aiMove = ai.chooseMove(state)
+            if (aiMove != null) {
+                state = Rules.applyMove(state, aiMove)
+                appendLog("AI played: $aiMove")
+            } else {
+                appendLog("AI has no legal moves. Passing turn.")
+                state = state.copy(
+                    currentPlayer = Player.HUMAN,
+                    turnNumber = state.turnNumber + 1,
+                )
+            }
+        }
+        hasPendingTurnChanges = false
+        turnStartState = state
+        publishState(clearSelection = true)
+    }
+
+    fun undoTurn() {
+        if (!hasPendingTurnChanges) return
+        state = turnStartState
+        pendingBonus = null
+        hasPendingTurnChanges = false
+        appendLog("Undid staged turn changes.")
+        publishState(clearSelection = true)
     }
 
     private fun tryApplySelectedSlide(source: Position, target: Position) {
@@ -195,6 +246,17 @@ class GameViewModel : ViewModel() {
         tryApplyHumanMove(selected)
     }
 
+    private fun tryStagePlant(tileType: TileType, gate: Position) {
+        if (state.winner != null || state.isDraw || state.currentPlayer != Player.HUMAN) return
+        val plant = Move.Plant(tileType, gate)
+        val legalMoves = Rules.legalMoves(state)
+        if (plant !in legalMoves) {
+            appendLog("Plant is not legal at that gate.")
+            return
+        }
+        tryApplyHumanMove(plant)
+    }
+
     private fun tryApplyHumanMove(move: Move) {
         val legal = Rules.legalMoves(state)
         if (move !in legal) {
@@ -202,29 +264,24 @@ class GameViewModel : ViewModel() {
             return
         }
 
+        if (!hasPendingTurnChanges) turnStartState = state
         state = Rules.applyMove(state, move)
-        appendLog("Human played: $move")
+        appendLog("Staged move: $move")
         pendingBonus = null
+        hasPendingTurnChanges = true
         publishState(clearSelection = true)
-
-        if (state.winner == null && !state.isDraw && state.currentPlayer == Player.AI) {
-            val aiMove = ai.chooseMove(state)
-            if (aiMove != null) {
-                state = Rules.applyMove(state, aiMove)
-                appendLog("AI played: $aiMove")
-            } else {
-                appendLog("AI has no legal moves.")
-            }
-            publishState(clearSelection = true)
-        }
     }
 
     fun resetGame() {
         state = GameState.initial(defaultRulesConfig())
+        turnStartState = state
+        hasPendingTurnChanges = false
         pendingBonus = null
         _uiState.value = state.toUiState(
             log = listOf("Game reset."),
-            selectedTileType = TileType.ROSE,
+            selectedTileType = null,
+            selectedAccentType = null,
+            isAwaitingSubmit = false,
             selectedSource = null,
             selectedTarget = null,
             legalTargets = emptySet(),
@@ -240,10 +297,13 @@ class GameViewModel : ViewModel() {
         val source = if (clearSelection) null else _uiState.value.selectedSource
         val target = if (clearSelection) null else _uiState.value.selectedTarget
         val legalTargets = if (clearSelection) emptySet() else _uiState.value.legalTargets
-        val selectedTileType = _uiState.value.selectedTileType ?: TileType.ROSE
+        val selectedTileType = if (clearSelection) null else _uiState.value.selectedTileType
+        val selectedAccentType = if (clearSelection) null else _uiState.value.selectedAccentType
         _uiState.value = state.toUiState(
             log = priorLog,
             selectedTileType = selectedTileType,
+            selectedAccentType = selectedAccentType,
+            isAwaitingSubmit = hasPendingTurnChanges,
             selectedSource = source,
             selectedTarget = target,
             legalTargets = legalTargets,
@@ -260,7 +320,9 @@ class GameViewModel : ViewModel() {
 
     private fun GameState.toUiState(
         log: List<String>,
-        selectedTileType: TileType,
+        selectedTileType: TileType?,
+        selectedAccentType: AccentType?,
+        isAwaitingSubmit: Boolean,
         selectedSource: Position?,
         selectedTarget: Position?,
         legalTargets: Set<Position>,
@@ -268,16 +330,31 @@ class GameViewModel : ViewModel() {
         existingGames: List<ExistingGameSummary>,
         appScreen: AppScreen,
         drawerSection: DrawerSection,
-    ): GameUiState = GameUiState(
+    ): GameUiState {
+        val reserveOwner = if (isAwaitingSubmit) Player.HUMAN else currentPlayer
+        val reserve = reserves[reserveOwner] ?: reserves.getValue(Player.HUMAN)
+        val flowerCounts = (TileType.basicTypes + TileType.specialTypes).associateWith { tile ->
+            if (tile.isBasic) reserve.basicCount(tile) else reserve.specialCount(tile)
+        }
+        val accentCounts = AccentType.entries.associateWith { accent -> reserve.accentCount(accent) }
+
+        return GameUiState(
         boardSize = rules.boardSize,
         coordinateExtent = rules.coordinateExtent,
-        currentPlayer = currentPlayer,
+        currentPlayer = if (isAwaitingSubmit) Player.HUMAN else currentPlayer,
+        isAwaitingSubmit = isAwaitingSubmit,
+        canSubmitTurn = isAwaitingSubmit,
+        canUndoTurn = isAwaitingSubmit,
+        canInteract = !isAwaitingSubmit && winner == null && !isDraw && phase != GamePhase.FINISHED && currentPlayer == Player.HUMAN,
         selectedSource = selectedSource,
         selectedTarget = selectedTarget,
         legalTargets = legalTargets,
         legalPositions = rules.legalPositions,
         zoneByPosition = rules.zoneByPosition,
         selectedTileType = selectedTileType,
+        selectedAccentType = selectedAccentType,
+        flowerReserveCounts = flowerCounts,
+        accentReserveCounts = accentCounts,
         boardSnapshot = boardSnapshot(),
         eventLog = log,
         isGameOver = winner != null || isDraw || phase == GamePhase.FINISHED,
@@ -290,6 +367,40 @@ class GameViewModel : ViewModel() {
         appScreen = appScreen,
         drawerSection = drawerSection,
     )
+    }
+
+    private fun selectSourceFlower(position: Position) {
+        val legalTargets = Rules.legalMovesFrom(state, position).map { it.target }.toSet()
+        _uiState.update {
+            it.copy(
+                selectedSource = position,
+                selectedTarget = null,
+                selectedTileType = null,
+                selectedAccentType = null,
+                legalTargets = legalTargets,
+            )
+        }
+    }
+
+    private fun legalPlantTargets(tileType: TileType): Set<Position> {
+        return Rules.legalMoves(state)
+            .filterIsInstance<Move.Plant>()
+            .filter { it.type == tileType }
+            .map { it.target }
+            .toSet()
+    }
+
+    private fun clearSelection() {
+        _uiState.update {
+            it.copy(
+                selectedSource = null,
+                selectedTarget = null,
+                selectedTileType = null,
+                selectedAccentType = null,
+                legalTargets = emptySet(),
+            )
+        }
+    }
 
     private fun defaultRulesConfig(): RulesConfig = RulesConfig(
         openingBasicType = TileType.ROSE,
