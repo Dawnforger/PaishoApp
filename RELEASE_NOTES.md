@@ -1,5 +1,14 @@
 # Release Notes
 
+## v0.0.04
+
+- Added basic circular token visuals for board pieces.
+- Updated interaction flow for piece movement:
+  - tap a piece you control,
+  - legal destinations highlight on the board,
+  - tap a highlighted intersection to execute the move.
+- Retained gate-based planting with explicit "Plant on Gate" action.
+
 ## v0.0.03
 
 - Fixed circular board overlay alignment issues so marker/token placement stays correctly on-grid.
@@ -32,4 +41,5 @@
   - `v0.0.01`
   - `v0.0.02`
   - `v0.0.03`
+  - `v0.0.04`
   - ...

@@ -12,8 +12,8 @@ android {
         applicationId = "com.paisho.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.0.03"
+        versionCode = 3
+        versionName = "0.0.04"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
