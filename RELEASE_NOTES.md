@@ -1,5 +1,11 @@
 # Release Notes
 
+## v0.0.05
+
+- Added staged action review panel so players can see pending move/plant actions before finalizing.
+- Added Submit/Undo-driven turn staging flow refinements for better tester iteration on a turn.
+- Added bottom reserve tile tray polish and legal-space guidance for selected reserve tiles.
+
 ## v0.0.04
 
 - Added basic circular token visuals for board pieces.
@@ -42,4 +48,5 @@
   - `v0.0.02`
   - `v0.0.03`
   - `v0.0.04`
+  - `v0.0.05`
   - ...
