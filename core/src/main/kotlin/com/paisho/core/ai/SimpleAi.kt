@@ -25,8 +25,8 @@ class SimpleAi(
     private fun scoreMove(state: GameState, move: Move): Int {
         var score = 0
         when (move) {
-            is Move.Plant -> score += placementCentrality(state.rules.boardSize, move.target)
-            is Move.Slide -> score += placementCentrality(state.rules.boardSize, move.target) + 2
+            is Move.Plant -> score += placementCentrality(move.target)
+            is Move.Slide -> score += placementCentrality(move.target) + 2
         }
 
         val next = Rules.applyMove(state, move)
@@ -43,8 +43,7 @@ class SimpleAi(
         return score
     }
 
-    private fun placementCentrality(boardSize: Int, position: Position): Int {
-        val center = boardSize / 2
-        return 10 - (abs(center - position.row) + abs(center - position.col))
+    private fun placementCentrality(position: Position): Int {
+        return 10 - (abs(position.row) + abs(position.col))
     }
 }

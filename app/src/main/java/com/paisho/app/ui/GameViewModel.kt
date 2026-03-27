@@ -261,10 +261,13 @@ class GameViewModel : ViewModel() {
         drawerSection: DrawerSection,
     ): GameUiState = GameUiState(
         boardSize = rules.boardSize,
+        coordinateExtent = rules.coordinateExtent,
         currentPlayer = currentPlayer,
         selectedSource = selectedSource,
         selectedTarget = selectedTarget,
         legalTargets = legalTargets,
+        legalPositions = rules.legalPositions,
+        zoneByPosition = rules.zoneByPosition,
         selectedTileType = selectedTileType,
         boardSnapshot = boardSnapshot(),
         eventLog = log,

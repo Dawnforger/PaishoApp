@@ -1,6 +1,7 @@
 package com.paisho.app.ui
 
 import com.paisho.core.game.AccentType
+import com.paisho.core.game.BoardZone
 import com.paisho.core.game.GameEndReason
 import com.paisho.core.game.GamePhase
 import com.paisho.core.game.Player
@@ -39,10 +40,13 @@ data class NewGameSetupState(
 
 data class GameUiState(
     val boardSize: Int = 9,
+    val coordinateExtent: Int = 4,
     val currentPlayer: Player = Player.HUMAN,
     val selectedSource: Position? = null,
     val selectedTarget: Position? = null,
     val legalTargets: Set<Position> = emptySet(),
+    val legalPositions: Set<Position> = emptySet(),
+    val zoneByPosition: Map<Position, BoardZone> = emptyMap(),
     val selectedTileType: TileType? = TileType.CHRYSANTHEMUM,
     val boardSnapshot: Map<Position, String> = emptyMap(),
     val eventLog: List<String> = listOf("Welcome to Pai Sho."),

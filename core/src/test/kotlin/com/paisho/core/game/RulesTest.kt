@@ -41,8 +41,8 @@ class RulesTest {
     fun `harmony detection works for adjacent circle types`() {
         val state = GameState.initial().copy(
             flowers = listOf(
-                FlowerTile(1, Player.HUMAN, TileType.ROSE, Position(4, 2)),
-                FlowerTile(2, Player.HUMAN, TileType.CHRYSANTHEMUM, Position(4, 5)),
+                FlowerTile(1, Player.HUMAN, TileType.ROSE, Position(0, -2)),
+                FlowerTile(2, Player.HUMAN, TileType.CHRYSANTHEMUM, Position(0, 2)),
             ),
             accents = emptyList(),
         )
@@ -56,11 +56,11 @@ class RulesTest {
         val state = GameState.initial().copy(
             currentPlayer = Player.HUMAN,
             flowers = listOf(
-                FlowerTile(1, Player.HUMAN, TileType.CHRYSANTHEMUM, Position(4, 4)),
-                FlowerTile(2, Player.AI, TileType.ORCHID, Position(5, 5)),
+                FlowerTile(1, Player.HUMAN, TileType.CHRYSANTHEMUM, Position(0, 0)),
+                FlowerTile(2, Player.AI, TileType.ORCHID, Position(1, 1)),
             ),
         )
-        val legalMoves = Rules.legalMovesFrom(state, Position(4, 4))
+        val legalMoves = Rules.legalMovesFrom(state, Position(0, 0))
         assertTrue(legalMoves.isEmpty())
     }
 
@@ -68,12 +68,12 @@ class RulesTest {
     fun `harmony ring can be detected`() {
         val state = GameState.initial().copy(
             flowers = listOf(
-                FlowerTile(1, Player.HUMAN, TileType.ROSE, Position(1, 1)),
-                FlowerTile(2, Player.HUMAN, TileType.CHRYSANTHEMUM, Position(1, 4)),
-                FlowerTile(3, Player.HUMAN, TileType.RHODODENDRON, Position(1, 7)),
-                FlowerTile(4, Player.HUMAN, TileType.JASMINE, Position(7, 7)),
-                FlowerTile(5, Player.HUMAN, TileType.LILY, Position(7, 4)),
-                FlowerTile(6, Player.HUMAN, TileType.WHITE_JADE, Position(7, 1)),
+                FlowerTile(1, Player.HUMAN, TileType.ROSE, Position(3, -3)),
+                FlowerTile(2, Player.HUMAN, TileType.CHRYSANTHEMUM, Position(3, 0)),
+                FlowerTile(3, Player.HUMAN, TileType.RHODODENDRON, Position(3, 3)),
+                FlowerTile(4, Player.HUMAN, TileType.JASMINE, Position(-3, 3)),
+                FlowerTile(5, Player.HUMAN, TileType.LILY, Position(-3, 0)),
+                FlowerTile(6, Player.HUMAN, TileType.WHITE_JADE, Position(-3, -3)),
             ),
             accents = emptyList(),
         )
