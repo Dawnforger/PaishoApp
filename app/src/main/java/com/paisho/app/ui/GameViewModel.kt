@@ -131,6 +131,7 @@ class GameViewModel : ViewModel() {
 
     fun onPositionSelected(position: Position) {
         if (state.phase == GamePhase.FINISHED) return
+        val currentUi = _uiState.value
         val tappedFlower = state.flowerAt(position)
         if (tappedFlower?.owner == Player.HUMAN) {
             val legalTargets = Rules.legalMovesFrom(state, position).map { it.target }.toSet()
@@ -142,7 +143,18 @@ class GameViewModel : ViewModel() {
                 )
             }
         } else {
-            _uiState.update { it.copy(selectedTarget = position) }
+            val source = currentUi.selectedSource
+            if (source != null) {
+                if (position in currentUi.legalTargets) {
+                    tryApplySelectedSlide(source = source, target = position)
+                } else if (position == source) {
+                    _uiState.update { it.copy(selectedSource = null, selectedTarget = null, legalTargets = emptySet()) }
+                } else {
+                    _uiState.update { it.copy(selectedTarget = null) }
+                }
+            } else if (position in state.rules.gates) {
+                _uiState.update { it.copy(selectedTarget = position) }
+            }
         }
     }
 
@@ -154,36 +166,33 @@ class GameViewModel : ViewModel() {
         if (state.winner != null || state.isDraw || state.currentPlayer != Player.HUMAN) return
         val ui = _uiState.value
         val legalMoves = Rules.legalMoves(state)
-
-        val move = if (ui.selectedSource != null) {
-            val source = ui.selectedSource
-            val target = ui.selectedTarget ?: return
-            val tileId = state.flowerAt(source)?.id ?: return
-            val candidates = legalMoves.filterIsInstance<Move.Slide>()
-                .filter { it.tileId == tileId && it.target == target }
-            if (candidates.isEmpty()) {
-                appendLog("No legal arrange move from source to target.")
-                return
-            }
-            val selected = when {
-                candidates.any { it.bonus == pendingBonus } -> candidates.first { it.bonus == pendingBonus }
-                candidates.any { it.bonus == null } -> candidates.first { it.bonus == null }
-                else -> candidates.first()
-            }
-            pendingBonus = selected.bonus
-            selected
-        } else {
-            val gate = ui.selectedTarget ?: return
-            val type = ui.selectedTileType ?: TileType.CHRYSANTHEMUM
-            val plant = Move.Plant(type, gate)
-            if (plant !in legalMoves) {
-                appendLog("Plant is not legal at that gate.")
-                return
-            }
-            plant
+        val gate = ui.selectedTarget ?: return
+        val type = ui.selectedTileType ?: TileType.CHRYSANTHEMUM
+        val plant = Move.Plant(type, gate)
+        if (plant !in legalMoves) {
+            appendLog("Plant is not legal at that gate.")
+            return
         }
+        tryApplyHumanMove(plant)
+    }
 
-        tryApplyHumanMove(move)
+    private fun tryApplySelectedSlide(source: Position, target: Position) {
+        if (state.winner != null || state.isDraw || state.currentPlayer != Player.HUMAN) return
+        val legalMoves = Rules.legalMoves(state)
+        val tileId = state.flowerAt(source)?.id ?: return
+        val candidates = legalMoves.filterIsInstance<Move.Slide>()
+            .filter { it.tileId == tileId && it.target == target }
+        if (candidates.isEmpty()) {
+            appendLog("No legal arrange move from source to target.")
+            return
+        }
+        val selected = when {
+            candidates.any { it.bonus == pendingBonus } -> candidates.first { it.bonus == pendingBonus }
+            candidates.any { it.bonus == null } -> candidates.first { it.bonus == null }
+            else -> candidates.first()
+        }
+        pendingBonus = selected.bonus
+        tryApplyHumanMove(selected)
     }
 
     private fun tryApplyHumanMove(move: Move) {

@@ -4,6 +4,7 @@ package com.paisho.app.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -302,7 +304,7 @@ fun GameScreen(viewModel: GameViewModel) {
                 }
                 state.selectedSource != null -> {
                     val source = state.selectedSource
-                    "Arrange source: (${source?.row}, ${source?.col}) | target: ${state.selectedTarget?.let { "(${it.row}, ${it.col})" } ?: "none"}"
+                    "Piece selected at (${source?.row}, ${source?.col}). Tap a highlighted intersection to move."
                 }
                 else -> "Plant tile: ${state.selectedTileType?.name ?: "none"} | Gate: ${state.selectedTarget?.let { "(${it.row}, ${it.col})" } ?: "none"}"
             },
@@ -321,7 +323,7 @@ fun GameScreen(viewModel: GameViewModel) {
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = viewModel::performSelectedMoveOrPlant, enabled = !state.isGameOver) {
-                Text("Apply Turn")
+                Text("Plant on Gate")
             }
             Button(onClick = viewModel::resetGame) {
                 Text("Reset")
@@ -499,21 +501,25 @@ private fun CircularBoard(
                     .size(pointTouchRadius * 2)
                     .background(
                         when {
-                            isSource -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
-                            isTarget -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)
-                            isLegalTarget -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                            isSource -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                            isTarget -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
+                            isLegalTarget -> Color(0x8042A85A)
                             isInteractiveHint -> Color(0x22000000)
                             else -> Color.Transparent
                         },
-                        shape = androidx.compose.foundation.shape.CircleShape
+                        shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 if (token.isNotEmpty()) {
-                    Text(
-                        text = token,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (token.startsWith("A")) Color(0xFF7A1113) else Color(0xFF15264A)
+                    val isAiPiece = token.startsWith("A")
+                    val pieceFill = if (isAiPiece) Color(0xFFB74B4B) else Color(0xFF3B66A6)
+                    val pieceStroke = if (isAiPiece) Color(0xFF4A0D0F) else Color(0xFF0F2342)
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .background(color = pieceFill, shape = CircleShape)
+                            .border(width = 1.5.dp, color = pieceStroke, shape = CircleShape)
                     )
                 }
             }
