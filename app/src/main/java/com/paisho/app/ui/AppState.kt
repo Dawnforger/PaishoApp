@@ -1,6 +1,7 @@
 package com.paisho.app.ui
 
 import com.paisho.core.game.AccentType
+import com.paisho.core.game.BoardZone
 import com.paisho.core.game.GameEndReason
 import com.paisho.core.game.GamePhase
 import com.paisho.core.game.Player
@@ -39,11 +40,22 @@ data class NewGameSetupState(
 
 data class GameUiState(
     val boardSize: Int = 9,
+    val coordinateExtent: Int = 4,
     val currentPlayer: Player = Player.HUMAN,
+    val isAwaitingSubmit: Boolean = false,
+    val canSubmitTurn: Boolean = false,
+    val canUndoTurn: Boolean = false,
+    val canInteract: Boolean = true,
     val selectedSource: Position? = null,
     val selectedTarget: Position? = null,
     val legalTargets: Set<Position> = emptySet(),
-    val selectedTileType: TileType? = TileType.CHRYSANTHEMUM,
+    val legalPositions: Set<Position> = emptySet(),
+    val zoneByPosition: Map<Position, BoardZone> = emptyMap(),
+    val selectedTileType: TileType? = null,
+    val selectedAccentType: AccentType? = null,
+    val flowerReserveCounts: Map<TileType, Int> = emptyMap(),
+    val accentReserveCounts: Map<AccentType, Int> = emptyMap(),
+    val stagedActions: List<String> = emptyList(),
     val boardSnapshot: Map<Position, String> = emptyMap(),
     val eventLog: List<String> = listOf("Welcome to Pai Sho."),
     val isGameOver: Boolean = false,

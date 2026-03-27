@@ -56,7 +56,7 @@ object Rules {
     }
 
     fun computeMidlineCrossingHarmonyCount(state: GameState, player: Player): Int {
-        val center = state.rules.boardSize / 2
+        val center = 0
         return computeHarmonies(state).count { harmony ->
             if (harmony.owner != player) return@count false
             if (harmony.a.row == center || harmony.a.col == center) return@count false
@@ -68,7 +68,7 @@ object Rules {
     }
 
     fun hasHarmonyRing(state: GameState, player: Player): Boolean {
-        val center = Position(state.rules.boardSize / 2, state.rules.boardSize / 2)
+        val center = Position(0, 0)
         val edges = computeHarmonies(state).filter { it.owner == player }
         if (edges.isEmpty()) return false
 
@@ -296,7 +296,7 @@ object Rules {
             state.flowers
                 .filter { !state.isGate(it.position) }
                 .forEach { flower ->
-                    flower.position.surrounding8().filter { it.isInsideBoard(state.rules.boardSize) }.forEach { dest ->
+                    flower.position.surrounding8().filter { state.isOnBoard(it) }.forEach { dest ->
                         val action = BonusAction.BoatMove(flower.position, dest)
                         if (isBonusLegalBySimulation(state, action)) actions += action
                     }
@@ -315,13 +315,7 @@ object Rules {
         return legalBonusActions(stateAfterSlide)
     }
 
-    private fun allBoardPositions(state: GameState): List<Position> = buildList {
-        for (r in 0 until state.rules.boardSize) {
-            for (c in 0 until state.rules.boardSize) {
-                add(Position(r, c))
-            }
-        }
-    }
+    private fun allBoardPositions(state: GameState): List<Position> = state.rules.legalPositions.toList()
 
     private fun applyPlant(state: GameState, move: Move.Plant): GameState {
         val reserve = state.reserves.getValue(state.currentPlayer)
@@ -585,7 +579,7 @@ object Rules {
 
     private fun canEndMoveOn(state: GameState, tile: FlowerTile, target: Position): Boolean {
         if (state.isGate(target) && target != tile.position) return false
-        if (!target.isInsideBoard(state.rules.boardSize)) return false
+        if (!state.isOnBoard(target)) return false
         if (tile.type.isBasic) {
             val garden = state.gardenColor(target)
             if (garden != GardenColor.NEUTRAL && garden != tile.type.basicColor) return false
@@ -679,7 +673,7 @@ object Rules {
     }
 
     private fun segmentPassesThroughCenter(state: GameState, a: Position, b: Position): Boolean {
-        val center = Position(state.rules.boardSize / 2, state.rules.boardSize / 2)
+        val center = Position(0, 0)
         return segmentTouchesCenter(a, b, center)
     }
 

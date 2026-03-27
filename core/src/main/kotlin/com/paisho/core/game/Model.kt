@@ -1,8 +1,15 @@
 package com.paisho.core.game
 
 data class Position(val row: Int, val col: Int) {
-    fun isInsideBoard(size: Int): Boolean = row in 0 until size && col in 0 until size
-    fun isEdge(size: Int): Boolean = row == 0 || col == 0 || row == size - 1 || col == size - 1
+    fun isInsideBoard(size: Int): Boolean {
+        val extent = size / 2
+        return row in -extent..extent && col in -extent..extent
+    }
+
+    fun isEdge(size: Int): Boolean {
+        val extent = size / 2
+        return kotlin.math.abs(row) == extent || kotlin.math.abs(col) == extent
+    }
 
     fun surrounding8(): List<Position> = buildList {
         for (dr in -1..1) {
@@ -25,6 +32,50 @@ enum class GardenColor {
     RED,
     WHITE,
     NEUTRAL,
+}
+
+enum class BoardZone {
+    BORDER,
+    GATE,
+    RED_GARDEN,
+    WHITE_GARDEN,
+    NEUTRAL_GARDEN,
+}
+
+object SkudBoardLayout {
+    const val COORD_EXTENT: Int = 8
+    const val BOARD_DIAMETER: Int = COORD_EXTENT * 2 + 1
+
+    /**
+     * Legal coordinates match the octagonal playable footprint shown in the coordinate reference:
+     * all points where abs(x) + abs(y) <= 12, with x/y constrained to [-8, 8].
+     */
+    val legalPositions: Set<Position> = buildSet {
+        for (x in -COORD_EXTENT..COORD_EXTENT) {
+            for (y in -COORD_EXTENT..COORD_EXTENT) {
+                if (kotlin.math.abs(x) + kotlin.math.abs(y) <= 12) {
+                    add(Position(x, y))
+                }
+            }
+        }
+    }
+
+    val gates: Set<Position> = setOf(
+        Position(0, COORD_EXTENT),
+        Position(COORD_EXTENT, 0),
+        Position(0, -COORD_EXTENT),
+        Position(-COORD_EXTENT, 0),
+    )
+
+    val zoneByPosition: Map<Position, BoardZone> = legalPositions.associateWith { p ->
+        when {
+            p in gates -> BoardZone.GATE
+            p.row == 0 || p.col == 0 -> BoardZone.BORDER
+            p.row * p.col > 0 && kotlin.math.abs(p.row) + kotlin.math.abs(p.col) <= 6 -> BoardZone.RED_GARDEN
+            p.row * p.col < 0 && kotlin.math.abs(p.row) + kotlin.math.abs(p.col) <= 6 -> BoardZone.WHITE_GARDEN
+            else -> BoardZone.NEUTRAL_GARDEN
+        }
+    }
 }
 
 enum class TileType(
@@ -151,16 +202,14 @@ data class PlayerReserve(
 }
 
 data class RulesConfig(
-    val boardSize: Int = 9,
+    val coordinateExtent: Int = SkudBoardLayout.COORD_EXTENT,
+    val boardSize: Int = SkudBoardLayout.BOARD_DIAMETER,
     val openingBasicType: TileType = TileType.ROSE,
-    val humanStartGate: Position = Position(8, 4),
-    val aiStartGate: Position = Position(0, 4),
-    val gates: Set<Position> = setOf(
-        Position(0, 4),
-        Position(4, 0),
-        Position(4, 8),
-        Position(8, 4),
-    ),
+    val humanStartGate: Position = Position(0, -SkudBoardLayout.COORD_EXTENT),
+    val aiStartGate: Position = Position(0, SkudBoardLayout.COORD_EXTENT),
+    val legalPositions: Set<Position> = SkudBoardLayout.legalPositions,
+    val zoneByPosition: Map<Position, BoardZone> = SkudBoardLayout.zoneByPosition,
+    val gates: Set<Position> = SkudBoardLayout.gates,
     val humanAccentLoadout: List<AccentType> = listOf(
         AccentType.ROCK,
         AccentType.WHEEL,
@@ -192,20 +241,17 @@ data class GameState(
     fun reserveFor(player: Player): PlayerReserve = reserves.getValue(player)
     fun flowerAt(position: Position): FlowerTile? = flowers.firstOrNull { it.position == position }
     fun accentAt(position: Position): AccentTile? = accents.firstOrNull { it.position == position }
-    fun isOnBoard(position: Position): Boolean = position.isInsideBoard(rules.boardSize)
+    fun isOnBoard(position: Position): Boolean = position in rules.legalPositions
     fun isGate(position: Position): Boolean = position in rules.gates
     fun isOccupied(position: Position): Boolean = flowerAt(position) != null || accentAt(position) != null
     fun flowersFor(player: Player): List<FlowerTile> = flowers.filter { it.owner == player }
+    fun zoneAt(position: Position): BoardZone? = rules.zoneByPosition[position]
 
     fun gardenColor(position: Position): GardenColor {
-        val center = rules.boardSize / 2
-        val inCentral = position.row in (center - 2)..(center + 2) && position.col in (center - 2)..(center + 2)
-        if (!inCentral) return GardenColor.NEUTRAL
-        if (position.row == center || position.col == center) return GardenColor.NEUTRAL
-        return when {
-            position.row < center && position.col > center -> GardenColor.RED
-            position.row > center && position.col < center -> GardenColor.RED
-            else -> GardenColor.WHITE
+        return when (zoneAt(position)) {
+            BoardZone.RED_GARDEN -> GardenColor.RED
+            BoardZone.WHITE_GARDEN -> GardenColor.WHITE
+            else -> GardenColor.NEUTRAL
         }
     }
 
@@ -230,6 +276,7 @@ data class GameState(
     companion object {
         fun initial(config: RulesConfig = RulesConfig()): GameState {
             require(config.openingBasicType.isBasic) { "Opening tile must be a Basic Flower tile." }
+            require(config.gates.all { it in config.legalPositions }) { "All gates must be legal board coordinates." }
             require(config.humanStartGate in config.gates && config.aiStartGate in config.gates) {
                 "Starting gates must be valid gate positions."
             }

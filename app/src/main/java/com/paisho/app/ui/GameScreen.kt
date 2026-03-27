@@ -4,13 +4,14 @@ package com.paisho.app.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -44,11 +46,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -56,6 +60,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.rememberDrawerState
 import com.paisho.core.game.AccentType
+import com.paisho.core.game.BoardZone
 import com.paisho.core.game.GameEndReason
 import com.paisho.core.game.GamePhase
 import com.paisho.core.game.Player
@@ -65,6 +70,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import kotlin.math.min
 import kotlin.math.sqrt
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -115,7 +121,7 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Skud Pai Sho v0.0.02") },
+                    title = { Text("Skud Pai Sho v0.0.05") },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "Open menu")
@@ -262,76 +268,132 @@ private fun SettingsScreen() {
 @Composable
 fun GameScreen(viewModel: GameViewModel) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = if (state.isGameOver) {
-                when {
-                    state.isDraw -> "Game over: draw (${state.endReason?.name ?: "resolved"})."
-                    state.winner == Player.HUMAN -> "Game over: you win (${state.endReason?.name ?: "resolved"})."
-                    state.winner == Player.AI -> "Game over: AI wins (${state.endReason?.name ?: "resolved"})."
-                    else -> "Game over."
+        item {
+            Text(
+                text = if (state.isGameOver) {
+                    when {
+                        state.isDraw -> "Game over: draw (${state.endReason?.name ?: "resolved"})."
+                        state.winner == Player.HUMAN -> "Game over: you win (${state.endReason?.name ?: "resolved"})."
+                        state.winner == Player.AI -> "Game over: AI wins (${state.endReason?.name ?: "resolved"})."
+                        else -> "Game over."
+                    }
+                } else {
+                    "Turn: ${if (state.currentPlayer == Player.HUMAN) "Human" else "AI"}"
                 }
-            } else {
-                "Turn: ${if (state.currentPlayer == Player.HUMAN) "Human" else "AI"}"
-            }
-        )
+            )
+        }
 
-        CircularBoard(
-            boardSize = state.boardSize,
-            selectedSource = state.selectedSource,
-            selectedTarget = state.selectedTarget,
-            legalTargets = state.legalTargets,
-            onTileClick = viewModel::onPositionSelected,
-            cells = state.boardSnapshot
-        )
-
-        Text(
-            text = when {
-                state.phase == GamePhase.FINISHED -> when (state.endReason) {
-                    GameEndReason.HARMONY_RING -> "Victory by Harmony Ring."
-                    GameEndReason.LAST_BASIC_PLAYED -> "End by last Basic tile and midline harmonies."
-                    GameEndReason.FORCED_DRAW -> "Game ended in a forced draw."
-                    null -> "Game finished."
-                }
-                state.selectedSource != null -> {
-                    val source = state.selectedSource
-                    "Arrange source: (${source?.row}, ${source?.col}) | target: ${state.selectedTarget?.let { "(${it.row}, ${it.col})" } ?: "none"}"
-                }
-                else -> "Plant tile: ${state.selectedTileType?.name ?: "none"} | Gate: ${state.selectedTarget?.let { "(${it.row}, ${it.col})" } ?: "none"}"
-            },
-            style = MaterialTheme.typography.bodyMedium
-        )
-
-        LazyColumn(modifier = Modifier.height(74.dp)) {
-            items(listOf(TileType.ROSE, TileType.CHRYSANTHEMUM, TileType.RHODODENDRON, TileType.JASMINE, TileType.LILY, TileType.WHITE_JADE)) { tile ->
-                TilePickerButton(
-                    label = tile.shortName,
-                    selected = state.selectedTileType == tile,
-                    onClick = { viewModel.selectTileToPlant(tile) }
+        item {
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                CircularBoard(
+                    boardSize = state.boardSize,
+                    coordinateExtent = state.coordinateExtent,
+                    selectedSource = state.selectedSource,
+                    selectedTarget = state.selectedTarget,
+                    legalTargets = state.legalTargets,
+                    legalPositions = state.legalPositions,
+                    zoneByPosition = state.zoneByPosition,
+                    onTileClick = viewModel::onPositionSelected,
+                    cells = state.boardSnapshot
                 )
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = viewModel::performSelectedMoveOrPlant, enabled = !state.isGameOver) {
-                Text("Apply Turn")
-            }
-            Button(onClick = viewModel::resetGame) {
-                Text("Reset")
+        val selectedTile = state.selectedTileType
+        val selectedAccent = state.selectedAccentType
+
+        item {
+            Text(
+                text = when {
+                    state.phase == GamePhase.FINISHED -> when (state.endReason) {
+                        GameEndReason.HARMONY_RING -> "Victory by Harmony Ring."
+                        GameEndReason.LAST_BASIC_PLAYED -> "End by last Basic tile and midline harmonies."
+                        GameEndReason.FORCED_DRAW -> "Game ended in a forced draw."
+                        null -> "Game finished."
+                    }
+                    state.isAwaitingSubmit -> "Turn action staged. Submit to finalize turn or Undo to revert."
+                    state.selectedSource != null -> {
+                        val source = state.selectedSource
+                        "Piece selected at (${source?.row}, ${source?.col}). Tap a highlighted intersection to move."
+                    }
+                    selectedTile != null -> "Tile ${tileCode(selectedTile)} selected. Tap a highlighted legal space."
+                    selectedAccent != null -> "Accent ${accentCode(selectedAccent)} selected. Bonus placement is available after Harmony."
+                    else -> "Select a board piece to move or select a reserve token to plant."
+                },
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+
+        item {
+            if (state.stagedActions.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            "Staged actions",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        state.stagedActions.forEachIndexed { index, action ->
+                            Text(
+                                text = "${index + 1}. $action",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
             }
         }
 
-        Text("Game log", fontWeight = FontWeight.SemiBold)
-        Card(modifier = Modifier.fillMaxWidth()) {
-            LazyColumn(modifier = Modifier.height(160.dp).padding(8.dp)) {
-                items(state.eventLog) { entry ->
-                    Text(text = entry, style = MaterialTheme.typography.bodySmall)
-                    Spacer(modifier = Modifier.height(4.dp))
+        item {
+            ReserveTray(
+                state = state,
+                onFlowerClick = viewModel::selectFlowerReserveTile,
+                onAccentClick = viewModel::selectAccentReserveTile
+            )
+        }
+
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = viewModel::undoTurn,
+                    enabled = state.canUndoTurn && !state.isGameOver
+                ) {
+                    Text("Undo")
+                }
+                Button(
+                    onClick = viewModel::submitTurn,
+                    enabled = state.canSubmitTurn && !state.isGameOver
+                ) {
+                    Text("Submit")
+                }
+                Button(onClick = viewModel::resetGame) {
+                    Text("Reset")
+                }
+            }
+        }
+
+        item {
+            Text("Game log", fontWeight = FontWeight.SemiBold)
+        }
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                LazyColumn(modifier = Modifier.height(160.dp).padding(8.dp)) {
+                    items(state.eventLog) { entry ->
+                        Text(text = entry, style = MaterialTheme.typography.bodySmall)
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
                 }
             }
         }
@@ -341,9 +403,12 @@ fun GameScreen(viewModel: GameViewModel) {
 @Composable
 private fun CircularBoard(
     boardSize: Int,
+    coordinateExtent: Int,
     selectedSource: Position?,
     selectedTarget: Position?,
     legalTargets: Set<Position>,
+    legalPositions: Set<Position>,
+    zoneByPosition: Map<Position, BoardZone>,
     onTileClick: (Position) -> Unit,
     cells: Map<Position, String>
 ) {
@@ -354,19 +419,13 @@ private fun CircularBoard(
     val boardRadiusFraction = 0.48f
     val playableRadiusFraction = 0.96f
 
-    fun intersectionFraction(row: Int, col: Int): Pair<Float, Float> {
-        val nx = if (boardSize <= 1) 0f else (col.toFloat() / (boardSize - 1)) * 2f - 1f
-        val ny = if (boardSize <= 1) 0f else (row.toFloat() / (boardSize - 1)) * 2f - 1f
+    fun intersectionFraction(position: Position): Pair<Float, Float> {
+        val nx = if (coordinateExtent == 0) 0f else (position.col.toFloat() / coordinateExtent.toFloat())
+        val ny = if (coordinateExtent == 0) 0f else (-position.row.toFloat() / coordinateExtent.toFloat())
         return (0.5f + nx * latticeRadiusFraction) to (0.5f + ny * latticeRadiusFraction)
     }
 
-    val allPoints = buildList {
-        for (row in 0 until boardSize) {
-            for (col in 0 until boardSize) {
-                add(Position(row, col))
-            }
-        }
-    }
+    val allPoints = legalPositions.sortedWith(compareByDescending<Position> { it.row }.thenBy { it.col })
     val interactivePoints = (legalTargets + selectedSource + selectedTarget).filterNotNull().toSet()
 
     Box(
@@ -385,7 +444,7 @@ private fun CircularBoard(
                     var closest: Position? = null
                     var closestDistance = Float.MAX_VALUE
                     for (point in allPoints) {
-                        val (fx, fy) = intersectionFraction(point.row, point.col)
+                        val (fx, fy) = intersectionFraction(point)
                         val p = Offset(size.width * fx, size.height * fy)
                         val px = tapOffset.x - p.x
                         val py = tapOffset.y - p.y
@@ -412,35 +471,32 @@ private fun CircularBoard(
             drawCircle(color = Color(0xFF3A3638), radius = radius, center = center, style = Fill)
             drawCircle(color = Color(0xFFD8D0C9), radius = radius * 0.965f, center = center, style = Fill)
 
-            val centralPath = Path().apply {
-                val top = Offset(center.x, center.y - radius * 0.52f)
-                val left = Offset(center.x - radius * 0.52f, center.y)
-                val right = Offset(center.x + radius * 0.52f, center.y)
-                val bottom = Offset(center.x, center.y + radius * 0.52f)
-                moveTo(top.x, top.y)
-                lineTo(left.x, left.y)
-                lineTo(center.x, center.y)
-                lineTo(top.x, top.y)
-                moveTo(top.x, top.y)
-                lineTo(right.x, right.y)
-                lineTo(center.x, center.y)
-                lineTo(top.x, top.y)
-                moveTo(bottom.x, bottom.y)
-                lineTo(left.x, left.y)
-                lineTo(center.x, center.y)
-                lineTo(bottom.x, bottom.y)
-                moveTo(bottom.x, bottom.y)
-                lineTo(right.x, right.y)
-                lineTo(center.x, center.y)
-                lineTo(bottom.x, bottom.y)
+            // Paint board zones directly from legal coordinate map.
+            val cellRadius = maxOf(1.6f, (sizePx / boardSize) * 0.38f)
+            for (point in allPoints) {
+                val (fx, fy) = intersectionFraction(point)
+                val marker = Offset(size.width * fx, size.height * fy)
+                val zoneColor = when (zoneByPosition[point]) {
+                    BoardZone.BORDER -> Color(0xFF2E2E32)
+                    BoardZone.GATE -> Color(0xFF6C9D7A)
+                    BoardZone.RED_GARDEN -> Color(0xFFD86A63)
+                    BoardZone.WHITE_GARDEN -> Color(0xFFF2F0EC)
+                    BoardZone.NEUTRAL_GARDEN -> Color(0xFFD2C7B8)
+                    null -> Color.Transparent
+                }
+                drawCircle(color = zoneColor, radius = cellRadius, center = marker, style = Fill)
             }
-            drawPath(path = centralPath, color = Color(0xFFA1262A), style = Fill)
 
-            // Draw board lattice lines between intersections, so pieces sit on line crossings.
-            for (row in 0 until boardSize) {
+            // Draw board lattice lines between legal intersections, so pieces sit on line crossings.
+            for (row in coordinateExtent downTo -coordinateExtent) {
                 var prev: Offset? = null
-                for (col in 0 until boardSize) {
-                    val (fx, fy) = intersectionFraction(row, col)
+                for (col in -coordinateExtent..coordinateExtent) {
+                    val position = Position(row, col)
+                    if (position !in legalPositions) {
+                        prev = null
+                        continue
+                    }
+                    val (fx, fy) = intersectionFraction(position)
                     val point = Offset(size.width * fx, size.height * fy)
                     prev?.let {
                         drawLine(
@@ -454,10 +510,15 @@ private fun CircularBoard(
                     prev = point
                 }
             }
-            for (col in 0 until boardSize) {
+            for (col in -coordinateExtent..coordinateExtent) {
                 var prev: Offset? = null
-                for (row in 0 until boardSize) {
-                    val (fx, fy) = intersectionFraction(row, col)
+                for (row in coordinateExtent downTo -coordinateExtent) {
+                    val position = Position(row, col)
+                    if (position !in legalPositions) {
+                        prev = null
+                        continue
+                    }
+                    val (fx, fy) = intersectionFraction(position)
                     val point = Offset(size.width * fx, size.height * fy)
                     prev?.let {
                         drawLine(
@@ -472,7 +533,7 @@ private fun CircularBoard(
                 }
             }
             for (point in allPoints) {
-                val (fx, fy) = intersectionFraction(point.row, point.col)
+                val (fx, fy) = intersectionFraction(point)
                 val marker = Offset(size.width * fx, size.height * fy)
                 drawCircle(color = Color(0xFF1F1A1B), radius = 2.2f, center = marker)
             }
@@ -487,7 +548,7 @@ private fun CircularBoard(
             val isInteractiveHint = position in interactivePoints
             if (token.isEmpty() && !isSource && !isTarget && !isLegalTarget && !isInteractiveHint) return@forEach
 
-            val (fx, fy) = intersectionFraction(position.row, position.col)
+            val (fx, fy) = intersectionFraction(position)
             val x = boardSizeDp * fx
             val y = boardSizeDp * fy
 
@@ -498,21 +559,25 @@ private fun CircularBoard(
                     .size(pointTouchRadius * 2)
                     .background(
                         when {
-                            isSource -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
-                            isTarget -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f)
-                            isLegalTarget -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+                            isSource -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                            isTarget -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
+                            isLegalTarget -> Color(0x8042A85A)
                             isInteractiveHint -> Color(0x22000000)
                             else -> Color.Transparent
                         },
-                        shape = androidx.compose.foundation.shape.CircleShape
+                        shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 if (token.isNotEmpty()) {
-                    Text(
-                        text = token,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (token.startsWith("A")) Color(0xFF7A1113) else Color(0xFF15264A)
+                    val isAiPiece = token.startsWith("A")
+                    val pieceFill = if (isAiPiece) Color(0xFFB74B4B) else Color(0xFF3B66A6)
+                    val pieceStroke = if (isAiPiece) Color(0xFF4A0D0F) else Color(0xFF0F2342)
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .background(color = pieceFill, shape = CircleShape)
+                            .border(width = 1.5.dp, color = pieceStroke, shape = CircleShape)
                     )
                 }
             }
@@ -520,17 +585,105 @@ private fun CircularBoard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TilePickerButton(
-    label: String,
+private fun ReserveTray(
+    state: GameUiState,
+    onFlowerClick: (TileType) -> Unit,
+    onAccentClick: (AccentType) -> Unit
+) {
+    val flowerOrder = listOf(
+        TileType.ROSE, TileType.CHRYSANTHEMUM, TileType.RHODODENDRON,
+        TileType.JASMINE, TileType.LILY, TileType.WHITE_JADE,
+        TileType.WHITE_LOTUS, TileType.ORCHID
+    )
+    val accentOrder = listOf(AccentType.BOAT, AccentType.KNOTWEED, AccentType.WHEEL, AccentType.ROCK)
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Flower tiles", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            flowerOrder.forEach { tile ->
+                val count = state.flowerReserveCounts[tile] ?: 0
+                ReserveToken(
+                    code = tileCode(tile),
+                    count = count,
+                    selected = state.selectedTileType == tile,
+                    enabled = state.canInteract && count > 0,
+                    onClick = { onFlowerClick(tile) }
+                )
+            }
+        }
+
+        Text("Accent tiles", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            accentOrder.forEach { accent ->
+                val count = state.accentReserveCounts[accent] ?: 0
+                ReserveToken(
+                    code = accentCode(accent),
+                    count = count,
+                    selected = state.selectedAccentType == accent,
+                    enabled = state.canInteract && count > 0,
+                    onClick = { onAccentClick(accent) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReserveToken(
+    code: String,
+    count: Int,
     selected: Boolean,
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier,
-        enabled = true
-    ) {
-        Text(if (selected) "[$label]" else label)
+    val fill = when {
+        !enabled -> Color(0xFF7D7D7D)
+        selected -> Color(0xFF2E7D32)
+        else -> Color(0xFF455A64)
     }
+    Box(
+        modifier = Modifier
+            .size(42.dp)
+            .background(fill, CircleShape)
+            .border(
+                width = if (selected) 2.dp else 1.dp,
+                color = if (selected) Color(0xFFEAF7EB) else Color(0xFFDFE3E5),
+                shape = CircleShape
+            )
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "$code\n$count",
+            color = Color.White,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.labelSmall
+        )
+    }
+}
+
+private fun tileCode(tile: TileType): String = when (tile) {
+    TileType.ROSE -> "R3"
+    TileType.CHRYSANTHEMUM -> "R4"
+    TileType.RHODODENDRON -> "R5"
+    TileType.JASMINE -> "W3"
+    TileType.LILY -> "W4"
+    TileType.WHITE_JADE -> "W5"
+    TileType.WHITE_LOTUS -> "WL"
+    TileType.ORCHID -> "OR"
+}
+
+private fun accentCode(accent: AccentType): String = when (accent) {
+    AccentType.BOAT -> "BT"
+    AccentType.KNOTWEED -> "KW"
+    AccentType.WHEEL -> "WH"
+    AccentType.ROCK -> "ST"
 }
