@@ -55,6 +55,7 @@ data class GameUiState(
     val selectedAccentType: AccentType? = null,
     val flowerReserveCounts: Map<TileType, Int> = emptyMap(),
     val accentReserveCounts: Map<AccentType, Int> = emptyMap(),
+    val stagedActions: List<String> = emptyList(),
     val boardSnapshot: Map<Position, String> = emptyMap(),
     val eventLog: List<String> = listOf("Welcome to Pai Sho."),
     val isGameOver: Boolean = false,

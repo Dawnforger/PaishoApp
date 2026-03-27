@@ -20,9 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -77,8 +74,6 @@ import kotlin.math.sqrt
 @Composable
 fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val selectedTile = state.selectedTileType
-    val selectedAccent = state.selectedAccentType
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -333,6 +328,32 @@ fun GameScreen(viewModel: GameViewModel) {
                 },
                 style = MaterialTheme.typography.bodyMedium
             )
+        }
+
+        item {
+            if (state.stagedActions.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            "Staged actions",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        state.stagedActions.forEachIndexed { index, action ->
+                            Text(
+                                text = "${index + 1}. $action",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+            }
         }
 
         item {

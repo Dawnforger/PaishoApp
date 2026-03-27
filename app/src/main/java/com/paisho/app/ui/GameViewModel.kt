@@ -23,6 +23,7 @@ class GameViewModel : ViewModel() {
     private var state: GameState = GameState.initial(defaultRulesConfig())
     private var turnStartState: GameState = state
     private var hasPendingTurnChanges: Boolean = false
+    private var stagedActions: List<String> = emptyList()
     private var pendingBonus: BonusAction? = null
     private val _uiState = MutableStateFlow(
         state.toUiState(
@@ -33,6 +34,7 @@ class GameViewModel : ViewModel() {
             selectedSource = null,
             selectedTarget = null,
             legalTargets = emptySet(),
+            stagedActions = emptyList(),
             setupState = NewGameSetupState(),
             existingGames = emptyList(),
             appScreen = AppScreen.Home,
@@ -118,6 +120,7 @@ class GameViewModel : ViewModel() {
         pendingBonus = null
         turnStartState = state
         hasPendingTurnChanges = false
+        stagedActions = emptyList()
         _uiState.value = state.toUiState(
             log = listOf(
                 "New game started.",
@@ -130,6 +133,7 @@ class GameViewModel : ViewModel() {
             selectedSource = null,
             selectedTarget = null,
             legalTargets = emptySet(),
+            stagedActions = emptyList(),
             setupState = setup,
             existingGames = addExistingGameRecord(_uiState.value.existingGames, setup),
             appScreen = AppScreen.Game,
@@ -215,6 +219,7 @@ class GameViewModel : ViewModel() {
         }
         hasPendingTurnChanges = false
         turnStartState = state
+        stagedActions = emptyList()
         publishState(clearSelection = true)
     }
 
@@ -223,6 +228,7 @@ class GameViewModel : ViewModel() {
         state = turnStartState
         pendingBonus = null
         hasPendingTurnChanges = false
+        stagedActions = emptyList()
         appendLog("Undid staged turn changes.")
         publishState(clearSelection = true)
     }
@@ -266,7 +272,9 @@ class GameViewModel : ViewModel() {
 
         if (!hasPendingTurnChanges) turnStartState = state
         state = Rules.applyMove(state, move)
-        appendLog("Staged move: $move")
+        val stagedLabel = move.toStagedActionLabel(turnStartState)
+        stagedActions = stagedActions + stagedLabel
+        appendLog("Staged move: $stagedLabel")
         pendingBonus = null
         hasPendingTurnChanges = true
         publishState(clearSelection = true)
@@ -276,6 +284,7 @@ class GameViewModel : ViewModel() {
         state = GameState.initial(defaultRulesConfig())
         turnStartState = state
         hasPendingTurnChanges = false
+        stagedActions = emptyList()
         pendingBonus = null
         _uiState.value = state.toUiState(
             log = listOf("Game reset."),
@@ -285,6 +294,7 @@ class GameViewModel : ViewModel() {
             selectedSource = null,
             selectedTarget = null,
             legalTargets = emptySet(),
+            stagedActions = emptyList(),
             setupState = _uiState.value.setupState,
             existingGames = _uiState.value.existingGames,
             appScreen = AppScreen.Game,
@@ -307,6 +317,7 @@ class GameViewModel : ViewModel() {
             selectedSource = source,
             selectedTarget = target,
             legalTargets = legalTargets,
+            stagedActions = stagedActions,
             setupState = _uiState.value.setupState,
             existingGames = _uiState.value.existingGames,
             appScreen = _uiState.value.appScreen,
@@ -326,6 +337,7 @@ class GameViewModel : ViewModel() {
         selectedSource: Position?,
         selectedTarget: Position?,
         legalTargets: Set<Position>,
+        stagedActions: List<String>,
         setupState: NewGameSetupState,
         existingGames: List<ExistingGameSummary>,
         appScreen: AppScreen,
@@ -349,6 +361,7 @@ class GameViewModel : ViewModel() {
         selectedSource = selectedSource,
         selectedTarget = selectedTarget,
         legalTargets = legalTargets,
+        stagedActions = stagedActions,
         legalPositions = rules.legalPositions,
         zoneByPosition = rules.zoneByPosition,
         selectedTileType = selectedTileType,
@@ -400,6 +413,44 @@ class GameViewModel : ViewModel() {
                 legalTargets = emptySet(),
             )
         }
+    }
+
+    private fun Move.toStagedActionLabel(beforeState: GameState): String = when (this) {
+        is Move.Plant -> "Plant ${tileCode(type)} at (${target.row}, ${target.col})"
+        is Move.Slide -> {
+            val from = beforeState.flowers.firstOrNull { it.id == tileId }?.position
+            val base = if (from != null) {
+                "Move (${from.row}, ${from.col}) -> (${target.row}, ${target.col})"
+            } else {
+                "Move tile #$tileId -> (${target.row}, ${target.col})"
+            }
+            if (bonus != null) "$base + ${bonusLabel(bonus)}" else base
+        }
+    }
+
+    private fun bonusLabel(bonus: BonusAction): String = when (bonus) {
+        is BonusAction.PlaceAccent -> "Accent ${accentCode(bonus.type)} at (${bonus.target.row}, ${bonus.target.col})"
+        is BonusAction.PlantBonus -> "Bonus plant ${tileCode(bonus.tileType)} at (${bonus.gate.row}, ${bonus.gate.col})"
+        is BonusAction.BoatMove -> "Boat move (${bonus.source.row}, ${bonus.source.col}) -> (${bonus.destination.row}, ${bonus.destination.col})"
+        is BonusAction.BoatRemoveAccent -> "Boat remove accent at (${bonus.targetAccent.row}, ${bonus.targetAccent.col})"
+    }
+
+    private fun tileCode(tile: TileType): String = when (tile) {
+        TileType.ROSE -> "R3"
+        TileType.CHRYSANTHEMUM -> "R4"
+        TileType.RHODODENDRON -> "R5"
+        TileType.JASMINE -> "W3"
+        TileType.LILY -> "W4"
+        TileType.WHITE_JADE -> "W5"
+        TileType.WHITE_LOTUS -> "WL"
+        TileType.ORCHID -> "OR"
+    }
+
+    private fun accentCode(accent: AccentType): String = when (accent) {
+        AccentType.BOAT -> "BT"
+        AccentType.KNOTWEED -> "KW"
+        AccentType.WHEEL -> "WH"
+        AccentType.ROCK -> "ST"
     }
 
     private fun defaultRulesConfig(): RulesConfig = RulesConfig(
