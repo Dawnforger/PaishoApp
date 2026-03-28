@@ -1,5 +1,11 @@
 # Release Notes
 
+## v0.0.06
+
+- Increased board background diameter so all legal intersections are inside the board disk.
+- Updated on-board placed piece visuals to mirror reserve token appearance (labeled circular tokens).
+- Corrected piece centering logic so pieces align precisely on grid intersections.
+
 ## v0.0.05
 
 - Added staged action review panel so players can see pending move/plant actions before finalizing.
@@ -49,4 +55,5 @@
   - `v0.0.03`
   - `v0.0.04`
   - `v0.0.05`
+  - `v0.0.06`
   - ...
