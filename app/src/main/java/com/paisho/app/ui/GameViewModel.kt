@@ -27,7 +27,7 @@ class GameViewModel : ViewModel() {
     private var pendingBonus: BonusAction? = null
     private val _uiState = MutableStateFlow(
         state.toUiState(
-            log = listOf("Skud Pai Sho v0.0.05 - full rules engine enabled."),
+            log = listOf("Skud Pai Sho v0.0.06 - full rules engine enabled."),
             selectedTileType = null,
             selectedAccentType = null,
             isAwaitingSubmit = false,
