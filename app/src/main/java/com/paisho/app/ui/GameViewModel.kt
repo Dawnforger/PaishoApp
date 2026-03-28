@@ -24,10 +24,12 @@ class GameViewModel : ViewModel() {
     private var turnStartState: GameState = state
     private var hasPendingTurnChanges: Boolean = false
     private var stagedActions: List<String> = emptyList()
+    private val persistedGames = mutableMapOf<String, PersistedGame>()
+    private var currentGameId: String? = null
     private var pendingBonus: BonusAction? = null
     private val _uiState = MutableStateFlow(
         state.toUiState(
-            log = listOf("Skud Pai Sho v0.0.06 - full rules engine enabled."),
+            log = listOf("Skud Pai Sho v0.0.07 - full rules engine enabled."),
             selectedTileType = null,
             selectedAccentType = null,
             isAwaitingSubmit = false,
@@ -49,6 +51,30 @@ class GameViewModel : ViewModel() {
 
     fun openExistingGames() {
         _uiState.update { it.copy(appScreen = AppScreen.ExistingGames, drawerSection = DrawerSection.ExistingGames) }
+    }
+
+    fun resumeGame(gameId: String) {
+        val persisted = persistedGames[gameId] ?: return
+        state = persisted.state
+        currentGameId = gameId
+        turnStartState = state
+        hasPendingTurnChanges = false
+        stagedActions = emptyList()
+        pendingBonus = null
+        _uiState.value = state.toUiState(
+            log = _uiState.value.eventLog + "Resumed ${persisted.title}.",
+            selectedTileType = null,
+            selectedAccentType = null,
+            isAwaitingSubmit = false,
+            selectedSource = null,
+            selectedTarget = null,
+            legalTargets = emptySet(),
+            stagedActions = emptyList(),
+            setupState = _uiState.value.setupState,
+            existingGames = _uiState.value.existingGames,
+            appScreen = AppScreen.Game,
+            drawerSection = DrawerSection.Game,
+        )
     }
 
     fun openSettings() {
@@ -121,6 +147,8 @@ class GameViewModel : ViewModel() {
         turnStartState = state
         hasPendingTurnChanges = false
         stagedActions = emptyList()
+        val updatedExistingGames = addExistingGameRecord(_uiState.value.existingGames, setup)
+        currentGameId = updatedExistingGames.firstOrNull()?.id
         _uiState.value = state.toUiState(
             log = listOf(
                 "New game started.",
@@ -135,10 +163,11 @@ class GameViewModel : ViewModel() {
             legalTargets = emptySet(),
             stagedActions = emptyList(),
             setupState = setup,
-            existingGames = addExistingGameRecord(_uiState.value.existingGames, setup),
+            existingGames = updatedExistingGames,
             appScreen = AppScreen.Game,
             drawerSection = DrawerSection.Game,
         )
+        syncPersistedGames(updatedExistingGames)
     }
 
     fun onPositionSelected(position: Position) {
@@ -220,6 +249,7 @@ class GameViewModel : ViewModel() {
         hasPendingTurnChanges = false
         turnStartState = state
         stagedActions = emptyList()
+        syncPersistedGames(_uiState.value.existingGames)
         publishState(clearSelection = true)
     }
 
@@ -230,6 +260,7 @@ class GameViewModel : ViewModel() {
         hasPendingTurnChanges = false
         stagedActions = emptyList()
         appendLog("Undid staged turn changes.")
+        syncPersistedGames(_uiState.value.existingGames)
         publishState(clearSelection = true)
     }
 
@@ -286,6 +317,7 @@ class GameViewModel : ViewModel() {
         hasPendingTurnChanges = false
         stagedActions = emptyList()
         pendingBonus = null
+        syncPersistedGames(_uiState.value.existingGames)
         _uiState.value = state.toUiState(
             log = listOf("Game reset."),
             selectedTileType = null,
@@ -309,6 +341,8 @@ class GameViewModel : ViewModel() {
         val legalTargets = if (clearSelection) emptySet() else _uiState.value.legalTargets
         val selectedTileType = if (clearSelection) null else _uiState.value.selectedTileType
         val selectedAccentType = if (clearSelection) null else _uiState.value.selectedAccentType
+        val currentExisting = _uiState.value.existingGames
+        syncPersistedGames(currentExisting)
         _uiState.value = state.toUiState(
             log = priorLog,
             selectedTileType = selectedTileType,
@@ -319,7 +353,7 @@ class GameViewModel : ViewModel() {
             legalTargets = legalTargets,
             stagedActions = stagedActions,
             setupState = _uiState.value.setupState,
-            existingGames = _uiState.value.existingGames,
+            existingGames = currentExisting,
             appScreen = _uiState.value.appScreen,
             drawerSection = _uiState.value.drawerSection,
         )
@@ -364,6 +398,7 @@ class GameViewModel : ViewModel() {
         stagedActions = stagedActions,
         legalPositions = rules.legalPositions,
         zoneByPosition = rules.zoneByPosition,
+        boardVisualConfig = defaultBoardVisualConfig(),
         selectedTileType = selectedTileType,
         selectedAccentType = selectedAccentType,
         flowerReserveCounts = flowerCounts,
@@ -471,5 +506,36 @@ class GameViewModel : ViewModel() {
         )
         return (listOf(next) + existing).take(10)
     }
+
+    private fun syncPersistedGames(existing: List<ExistingGameSummary>) {
+        existing.forEach { summary ->
+            val old = persistedGames[summary.id]
+            val isCurrent = summary.id == currentGameId
+            if (old == null) {
+                persistedGames[summary.id] = PersistedGame(
+                    id = summary.id,
+                    title = summary.title,
+                    subtitle = summary.subtitle,
+                    state = state,
+                )
+                return@forEach
+            }
+            persistedGames[summary.id] = old.copy(
+                title = summary.title,
+                subtitle = summary.subtitle,
+                state = if (isCurrent) state else old.state,
+            )
+        }
+        val validIds = existing.map { it.id }.toSet()
+        persistedGames.keys.retainAll(validIds)
+    }
+
+    private fun defaultBoardVisualConfig(): BoardVisualConfig = BoardVisualConfig(
+        backgroundImageResId = null,
+        backgroundScale = 1f,
+        backgroundOffsetXFraction = 0f,
+        backgroundOffsetYFraction = 0f,
+        showZoneMarkers = true,
+    )
 }
 

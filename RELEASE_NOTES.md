@@ -1,5 +1,13 @@
 # Release Notes
 
+## v0.0.07
+
+- Fixed remaining board token alignment issues for more consistent intersection anchoring.
+- Reduced board token size to minimize clipping in dense local clusters.
+- Enabled resume from Existing Games by tapping a saved game card.
+- Culled neutral-garden circle markers while keeping border/gates/red/white zones.
+- Added board visual config scaffolding to support future background image import/positioning.
+
 ## v0.0.06
 
 - Increased board background diameter so all legal intersections are inside the board disk.
@@ -56,4 +64,5 @@
   - `v0.0.04`
   - `v0.0.05`
   - `v0.0.06`
+  - `v0.0.07`
   - ...

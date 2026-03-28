@@ -4,6 +4,7 @@ import com.paisho.core.game.AccentType
 import com.paisho.core.game.BoardZone
 import com.paisho.core.game.GameEndReason
 import com.paisho.core.game.GamePhase
+import com.paisho.core.game.GameState
 import com.paisho.core.game.Player
 import com.paisho.core.game.Position
 import com.paisho.core.game.TileType
@@ -26,6 +27,21 @@ data class ExistingGameSummary(
     val id: String,
     val title: String,
     val subtitle: String,
+)
+
+data class PersistedGame(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val state: GameState,
+)
+
+data class BoardVisualConfig(
+    val backgroundImageResId: Int? = null,
+    val backgroundScale: Float = 1f,
+    val backgroundOffsetXFraction: Float = 0f,
+    val backgroundOffsetYFraction: Float = 0f,
+    val showZoneMarkers: Boolean = true,
 )
 
 data class NewGameSetupState(
@@ -51,6 +67,7 @@ data class GameUiState(
     val legalTargets: Set<Position> = emptySet(),
     val legalPositions: Set<Position> = emptySet(),
     val zoneByPosition: Map<Position, BoardZone> = emptyMap(),
+    val boardVisualConfig: BoardVisualConfig = BoardVisualConfig(),
     val selectedTileType: TileType? = null,
     val selectedAccentType: AccentType? = null,
     val flowerReserveCounts: Map<TileType, Int> = emptyMap(),

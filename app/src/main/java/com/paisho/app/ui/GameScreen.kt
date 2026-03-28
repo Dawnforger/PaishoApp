@@ -43,9 +43,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -122,7 +124,7 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Skud Pai Sho v0.0.06") },
+                    title = { Text("Skud Pai Sho v0.0.07") },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "Open menu")
@@ -146,7 +148,10 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
                         onBack = viewModel::openHome
                     )
                     AppScreen.Game -> GameScreen(viewModel = viewModel)
-                    AppScreen.ExistingGames -> ExistingGamesScreen(state.existingGames)
+                    AppScreen.ExistingGames -> ExistingGamesScreen(
+                        existingGames = state.existingGames,
+                        onResume = viewModel::resumeGame
+                    )
                     AppScreen.Settings -> SettingsScreen()
                 }
             }
@@ -225,7 +230,10 @@ private fun NewGameSetupScreen(
 }
 
 @Composable
-private fun ExistingGamesScreen(existingGames: List<ExistingGameSummary>) {
+private fun ExistingGamesScreen(
+    existingGames: List<ExistingGameSummary>,
+    onResume: (String) -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -238,10 +246,16 @@ private fun ExistingGamesScreen(existingGames: List<ExistingGameSummary>) {
         } else {
             LazyColumn {
                 items(existingGames) { game ->
-                    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clickable { onResume(game.id) }
+                    ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(game.title, fontWeight = FontWeight.SemiBold)
                             Text(game.subtitle, style = MaterialTheme.typography.bodySmall)
+                            Text("Tap to resume", style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -300,6 +314,7 @@ fun GameScreen(viewModel: GameViewModel) {
                     legalTargets = state.legalTargets,
                     legalPositions = state.legalPositions,
                     zoneByPosition = state.zoneByPosition,
+                    boardVisualConfig = state.boardVisualConfig,
                     onTileClick = viewModel::onPositionSelected,
                     cells = state.boardSnapshot
                 )
@@ -410,13 +425,14 @@ private fun CircularBoard(
     legalTargets: Set<Position>,
     legalPositions: Set<Position>,
     zoneByPosition: Map<Position, BoardZone>,
+    boardVisualConfig: BoardVisualConfig,
     onTileClick: (Position) -> Unit,
     cells: Map<Position, String>
 ) {
     val boardSizeDp = 360.dp
-    val pointTouchRadius = 13.dp
-    val pieceRadius = 18.dp
-    val pointVisualRadius = 3.dp
+    val pointTouchRadius = 11.dp
+    val pieceRadius = 14.dp
+    val pointVisualRadius = 2.4.dp
     val latticeRadiusFraction = 0.44f
     // Bigger board disk so all legal intersections stay inside the background.
     val boardRadiusFraction = 0.515f
@@ -466,7 +482,8 @@ private fun CircularBoard(
             },
         contentAlignment = Alignment.TopStart
     ) {
-        Canvas(modifier = Modifier.matchParentSize()) {
+        val boardVisual = boardVisualConfig
+        Canvas(modifier = Modifier.matchParentSize().clip(CircleShape)) {
             val sizePx = min(size.width, size.height)
             val center = Offset(size.width / 2f, size.height / 2f)
             val radius = sizePx * boardRadiusFraction
@@ -474,20 +491,28 @@ private fun CircularBoard(
             drawCircle(color = Color(0xFF3A3638), radius = radius, center = center, style = Fill)
             drawCircle(color = Color(0xFFD8D0C9), radius = radius * 0.975f, center = center, style = Fill)
 
-            // Paint board zones directly from legal coordinate map.
-            val cellRadius = maxOf(1.6f, (sizePx / boardSize) * 0.38f)
-            for (point in allPoints) {
-                val (fx, fy) = intersectionFraction(point)
-                val marker = Offset(size.width * fx, size.height * fy)
-                val zoneColor = when (zoneByPosition[point]) {
-                    BoardZone.BORDER -> Color(0xFF2E2E32)
-                    BoardZone.GATE -> Color(0xFF6C9D7A)
-                    BoardZone.RED_GARDEN -> Color(0xFFD86A63)
-                    BoardZone.WHITE_GARDEN -> Color(0xFFF2F0EC)
-                    BoardZone.NEUTRAL_GARDEN -> Color(0xFFD2C7B8)
-                    null -> Color.Transparent
+            // Placeholder for future image-based board rendering.
+            if (boardVisual.backgroundImageResId != null) {
+                // Intentionally left as no-op scaffold until drawable loading is wired.
+            }
+
+            if (boardVisual.showZoneMarkers) {
+                // Paint only non-neutral zone markers from legal coordinate map.
+                val cellRadius = maxOf(1.4f, (sizePx / boardSize) * 0.34f)
+                for (point in allPoints) {
+                    val (fx, fy) = intersectionFraction(point)
+                    val marker = Offset(size.width * fx, size.height * fy)
+                    val zoneColor = when (zoneByPosition[point]) {
+                        BoardZone.BORDER -> Color(0xFF2E2E32)
+                        BoardZone.GATE -> Color(0xFF6C9D7A)
+                        BoardZone.RED_GARDEN -> Color(0xFFD86A63)
+                        BoardZone.WHITE_GARDEN -> Color(0xFFF2F0EC)
+                        BoardZone.NEUTRAL_GARDEN, null -> Color.Transparent
+                    }
+                    if (zoneColor != Color.Transparent) {
+                        drawCircle(color = zoneColor, radius = cellRadius, center = marker, style = Fill)
+                    }
                 }
-                drawCircle(color = zoneColor, radius = cellRadius, center = marker, style = Fill)
             }
 
             // Draw board lattice lines between legal intersections, so pieces sit on line crossings.
@@ -538,7 +563,7 @@ private fun CircularBoard(
             for (point in allPoints) {
                 val (fx, fy) = intersectionFraction(point)
                 val marker = Offset(size.width * fx, size.height * fy)
-                drawCircle(color = Color(0xFF1F1A1B), radius = 2.2f, center = marker)
+                drawCircle(color = Color(0xFF1F1A1B), radius = pointVisualRadius.toPx(), center = marker)
             }
             drawCircle(color = Color(0xFF2D2527), radius = radius * 0.998f, center = center, style = Stroke(width = 4f))
         }
@@ -559,7 +584,7 @@ private fun CircularBoard(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .offset(x = x - pointTouchRadius, y = y - pointTouchRadius)
+                    .offset(x = x - pieceRadius, y = y - pieceRadius)
                     .size(pointTouchRadius * 2)
                     .background(
                         when {
@@ -718,3 +743,4 @@ private fun tokenCodeFromSnapshot(token: String): String? {
         else -> null
     }
 }
+

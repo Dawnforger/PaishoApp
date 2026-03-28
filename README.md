@@ -7,10 +7,10 @@ Native Android app for playing Skud Pai Sho with:
 
 ## Release
 
-- Current release: **v0.0.06**
-- Versioning policy: increment patch as **0.0.0x** per release (`v0.0.01`, `v0.0.02`, `v0.0.03`, `v0.0.04`, `v0.0.05`, `v0.0.06`, ...)
+- Current release: **v0.0.07**
+- Versioning policy: increment patch as **0.0.0x** per release (`v0.0.01`, `v0.0.02`, `v0.0.03`, `v0.0.04`, `v0.0.05`, `v0.0.06`, `v0.0.07`, ...)
 
-## Current implementation (v0.0.06)
+## Current implementation (v0.0.07)
 
 This repository includes a native Android project written in Kotlin + Jetpack Compose with:
 
