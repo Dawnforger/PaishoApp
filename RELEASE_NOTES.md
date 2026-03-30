@@ -1,5 +1,16 @@
 # Release Notes
 
+## v0.0.09
+
+- Rebuilt board rendering with a single pixel-space coordinate transform for taps, highlights, grid, and token centers.
+- Added tighter token sizing and canvas-based token drawing to reduce clipping and remove overlay drift.
+- Updated app version metadata and in-app labels for v0.0.09.
+
+## v0.0.08
+
+- Released center-anchored (0,0 origin) board placement update to improve uniform tile alignment.
+- Includes smaller on-board tokens, neutral marker culling, resume-from-existing-games support, and board background config scaffolding.
+
 ## v0.0.07
 
 - Fixed remaining board token alignment issues for more consistent intersection anchoring.
@@ -65,4 +76,6 @@
   - `v0.0.05`
   - `v0.0.06`
   - `v0.0.07`
+  - `v0.0.08`
+  - `v0.0.09`
   - ...

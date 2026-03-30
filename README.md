@@ -7,10 +7,10 @@ Native Android app for playing Skud Pai Sho with:
 
 ## Release
 
-- Current release: **v0.0.07**
-- Versioning policy: increment patch as **0.0.0x** per release (`v0.0.01`, `v0.0.02`, `v0.0.03`, `v0.0.04`, `v0.0.05`, `v0.0.06`, `v0.0.07`, ...)
+- Current release: **v0.0.09**
+- Versioning policy: increment patch as **0.0.0x** per release (`v0.0.01`, `v0.0.02`, `v0.0.03`, `v0.0.04`, `v0.0.05`, `v0.0.06`, `v0.0.07`, `v0.0.08`, `v0.0.09`, ...)
 
-## Current implementation (v0.0.07)
+## Current implementation (v0.0.09)
 
 This repository includes a native Android project written in Kotlin + Jetpack Compose with:
 
@@ -24,6 +24,7 @@ This repository includes a native Android project written in Kotlin + Jetpack Co
   - End-game detection (Harmony Ring and last-basic-tile midline scoring)
 - Local AI opponent with legal-move selection on top of full-rule legality
 - Compose UI for local gameplay loop against AI
+- Board rendering rewritten around a single pixel-space geometry transform so intersections, highlights, hit-testing, and piece centers align from one source of truth
 - Unit tests for core rule transitions and legality scenarios
 
 ## Architecture
