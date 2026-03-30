@@ -431,18 +431,11 @@ private fun CircularBoard(
 ) {
     val boardSizeDp = 360.dp
     val pointTouchRadius = 11.dp
-    val pieceRadius = 14.dp
+    val pieceRadius = 12.dp
     val pointVisualRadius = 2.4.dp
-    val latticeRadiusFraction = 0.44f
-    // Bigger board disk so all legal intersections stay inside the background.
     val boardRadiusFraction = 0.515f
     val playableRadiusFraction = 0.985f
-
-    fun intersectionFraction(position: Position): Pair<Float, Float> {
-        val nx = if (coordinateExtent == 0) 0f else (position.col.toFloat() / coordinateExtent.toFloat())
-        val ny = if (coordinateExtent == 0) 0f else (-position.row.toFloat() / coordinateExtent.toFloat())
-        return (0.5f + nx * latticeRadiusFraction) to (0.5f + ny * latticeRadiusFraction)
-    }
+    val anchorRadius = if (pieceRadius > pointTouchRadius) pieceRadius else pointTouchRadius
 
     val allPoints = legalPositions.sortedWith(compareByDescending<Position> { it.row }.thenBy { it.col })
     val interactivePoints = (legalTargets + selectedSource + selectedTarget).filterNotNull().toSet()
@@ -456,6 +449,7 @@ private fun CircularBoard(
                     val center = Offset(size.width / 2f, size.height / 2f)
                     val boardRadius = sizePx * boardRadiusFraction
                     val playableRadius = boardRadius * playableRadiusFraction
+                    val step = if (coordinateExtent == 0) 0f else (boardRadius * 0.90f) / coordinateExtent.toFloat()
                     val dx = tapOffset.x - center.x
                     val dy = tapOffset.y - center.y
                     if (dx * dx + dy * dy > playableRadius * playableRadius) return@detectTapGestures
@@ -463,8 +457,10 @@ private fun CircularBoard(
                     var closest: Position? = null
                     var closestDistance = Float.MAX_VALUE
                     for (point in allPoints) {
-                        val (fx, fy) = intersectionFraction(point)
-                        val p = Offset(size.width * fx, size.height * fy)
+                        val p = Offset(
+                            x = center.x + point.col * step,
+                            y = center.y - point.row * step,
+                        )
                         val px = tapOffset.x - p.x
                         val py = tapOffset.y - p.y
                         val d = sqrt(px * px + py * py)
@@ -474,7 +470,7 @@ private fun CircularBoard(
                         }
                     }
                     // Tight snapping: only accept taps close to a legal intersection marker.
-                    val snapRadiusPx = (sizePx / boardSize) * 0.32f
+                    val snapRadiusPx = maxOf((sizePx / boardSize) * 0.28f, step * 0.45f)
                     if (closest != null && closestDistance <= snapRadiusPx) {
                         onTileClick(closest)
                     }
@@ -487,6 +483,7 @@ private fun CircularBoard(
             val sizePx = min(size.width, size.height)
             val center = Offset(size.width / 2f, size.height / 2f)
             val radius = sizePx * boardRadiusFraction
+            val step = if (coordinateExtent == 0) 0f else (radius * 0.90f) / coordinateExtent.toFloat()
 
             drawCircle(color = Color(0xFF3A3638), radius = radius, center = center, style = Fill)
             drawCircle(color = Color(0xFFD8D0C9), radius = radius * 0.975f, center = center, style = Fill)
@@ -500,8 +497,10 @@ private fun CircularBoard(
                 // Paint only non-neutral zone markers from legal coordinate map.
                 val cellRadius = maxOf(1.4f, (sizePx / boardSize) * 0.34f)
                 for (point in allPoints) {
-                    val (fx, fy) = intersectionFraction(point)
-                    val marker = Offset(size.width * fx, size.height * fy)
+                    val marker = Offset(
+                        x = center.x + point.col * step,
+                        y = center.y - point.row * step,
+                    )
                     val zoneColor = when (zoneByPosition[point]) {
                         BoardZone.BORDER -> Color(0xFF2E2E32)
                         BoardZone.GATE -> Color(0xFF6C9D7A)
@@ -524,8 +523,10 @@ private fun CircularBoard(
                         prev = null
                         continue
                     }
-                    val (fx, fy) = intersectionFraction(position)
-                    val point = Offset(size.width * fx, size.height * fy)
+                    val point = Offset(
+                        x = center.x + position.col * step,
+                        y = center.y - position.row * step,
+                    )
                     prev?.let {
                         drawLine(
                             color = Color(0xFF1F1A1B),
@@ -546,8 +547,10 @@ private fun CircularBoard(
                         prev = null
                         continue
                     }
-                    val (fx, fy) = intersectionFraction(position)
-                    val point = Offset(size.width * fx, size.height * fy)
+                    val point = Offset(
+                        x = center.x + position.col * step,
+                        y = center.y - position.row * step,
+                    )
                     prev?.let {
                         drawLine(
                             color = Color(0xFF1F1A1B),
@@ -561,8 +564,10 @@ private fun CircularBoard(
                 }
             }
             for (point in allPoints) {
-                val (fx, fy) = intersectionFraction(point)
-                val marker = Offset(size.width * fx, size.height * fy)
+                val marker = Offset(
+                    x = center.x + point.col * step,
+                    y = center.y - point.row * step,
+                )
                 drawCircle(color = Color(0xFF1F1A1B), radius = pointVisualRadius.toPx(), center = marker)
             }
             drawCircle(color = Color(0xFF2D2527), radius = radius * 0.998f, center = center, style = Stroke(width = 4f))
@@ -576,16 +581,16 @@ private fun CircularBoard(
             val isInteractiveHint = position in interactivePoints
             if (token.isEmpty() && !isSource && !isTarget && !isLegalTarget && !isInteractiveHint) return@forEach
 
-            val (fx, fy) = intersectionFraction(position)
-            val x = boardSizeDp * fx
-            val y = boardSizeDp * fy
+            val stepDp = if (coordinateExtent == 0) 0.dp else boardSizeDp * (boardRadiusFraction * 0.90f / coordinateExtent.toFloat())
+            val x = boardSizeDp / 2 + (stepDp * position.col)
+            val y = boardSizeDp / 2 - (stepDp * position.row)
 
             val pieceCode = tokenCodeFromSnapshot(token)
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .offset(x = x - pieceRadius, y = y - pieceRadius)
-                    .size(pointTouchRadius * 2)
+                    .offset(x = x - anchorRadius, y = y - anchorRadius)
+                    .size(anchorRadius * 2)
                     .background(
                         when {
                             isSource -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
