@@ -1,5 +1,10 @@
 # Release Notes
 
+## v0.0.12
+
+- Fixed Wheel accent rotation direction so surrounding tiles rotate clockwise as intended.
+- Updated app version metadata and in-app labels for v0.0.12.
+
 ## v0.0.11
 
 - Replaced Harmony bonus action list with reserve-driven bonus selection flow.
@@ -95,4 +100,5 @@
   - `v0.0.09`
   - `v0.0.10`
   - `v0.0.11`
+  - `v0.0.12`
   - ...
