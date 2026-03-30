@@ -335,7 +335,7 @@ fun GameScreen(viewModel: GameViewModel) {
                         GameEndReason.FORCED_DRAW -> "Game ended in a forced draw."
                         null -> "Game finished."
                     }
-                    state.pendingBonusChoices.isNotEmpty() -> "Harmony formed. Choose a bonus action to stage the move."
+                    state.isHarmonyBonusFlow -> "Harmony formed. Select a reserve tile and then a highlighted target for the bonus."
                     state.isAwaitingSubmit -> "Turn action staged. Submit to finalize turn or Undo to revert."
                     state.selectedSource != null -> {
                         val source = state.selectedSource
@@ -350,31 +350,28 @@ fun GameScreen(viewModel: GameViewModel) {
         }
 
         item {
-            if (state.pendingBonusChoices.isNotEmpty()) {
+            if (state.isHarmonyBonusFlow) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(
                         modifier = Modifier.padding(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            "Harmony bonus choices",
+                            "Harmony bonus active",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold
                         )
-                        state.pendingBonusChoices.forEach { choice ->
-                            Button(
-                                onClick = { viewModel.choosePendingBonusChoice(choice.index) },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(choice.label)
-                            }
-                        }
-                        TextButton(onClick = viewModel::cancelPendingBonusSelection) {
-                            Text("Cancel bonus selection")
-                        }
+                        Text(
+                            "Choose a legal flower/accent from reserve; legal bonus targets will highlight on the board.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            "Undo returns to the start of this harmony bonus flow.",
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }
@@ -678,11 +675,12 @@ private fun ReserveTray(
         ) {
             flowerOrder.forEach { tile ->
                 val count = state.flowerReserveCounts[tile] ?: 0
+                val bonusEnabled = !state.isHarmonyBonusFlow || tile in state.harmonyBonusFlowerOptions
                 ReserveToken(
                     code = tileCode(tile),
                     count = count,
                     selected = state.selectedTileType == tile,
-                    enabled = state.canInteract && count > 0,
+                    enabled = if (state.isHarmonyBonusFlow) bonusEnabled && count > 0 else state.canInteract && count > 0,
                     onClick = { onFlowerClick(tile) }
                 )
             }
@@ -695,11 +693,12 @@ private fun ReserveTray(
         ) {
             accentOrder.forEach { accent ->
                 val count = state.accentReserveCounts[accent] ?: 0
+                val bonusEnabled = !state.isHarmonyBonusFlow || accent in state.harmonyBonusAccentOptions
                 ReserveToken(
                     code = accentCode(accent),
                     count = count,
                     selected = state.selectedAccentType == accent,
-                    enabled = state.canInteract && count > 0,
+                    enabled = if (state.isHarmonyBonusFlow) bonusEnabled && count > 0 else state.canInteract && count > 0,
                     onClick = { onAccentClick(accent) }
                 )
             }

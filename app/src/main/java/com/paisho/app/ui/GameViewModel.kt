@@ -10,8 +10,8 @@ import com.paisho.core.game.GameState
 import com.paisho.core.game.Move
 import com.paisho.core.game.Player
 import com.paisho.core.game.Position
-import com.paisho.core.game.RulesConfig
 import com.paisho.core.game.Rules
+import com.paisho.core.game.RulesConfig
 import com.paisho.core.game.TileType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +19,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
 class GameViewModel : ViewModel() {
+    private data class HarmonyUndoState(
+        val startState: GameState,
+        val candidates: List<Move.Slide>,
+    )
+
     private val ai = SimpleAi()
     private var state: GameState = GameState.initial(defaultRulesConfig())
     private var turnStartState: GameState = state
@@ -26,7 +31,9 @@ class GameViewModel : ViewModel() {
     private var stagedActions: List<String> = emptyList()
     private val persistedGames = mutableMapOf<String, PersistedGame>()
     private var currentGameId: String? = null
-    private var pendingSlideCandidates: List<Move.Slide> = emptyList()
+    private var pendingHarmonySlideCandidates: List<Move.Slide> = emptyList()
+    private var pendingHarmonyStartState: GameState? = null
+    private var stagedHarmonyUndoState: HarmonyUndoState? = null
     private val _uiState = MutableStateFlow(
         state.toUiState(
             log = listOf("Skud Pai Sho v0.0.10 - full rules engine enabled."),
@@ -37,7 +44,9 @@ class GameViewModel : ViewModel() {
             selectedTarget = null,
             legalTargets = emptySet(),
             stagedActions = emptyList(),
-            pendingBonusChoices = emptyList(),
+            isHarmonyBonusFlow = false,
+            harmonyBonusFlowerOptions = emptySet(),
+            harmonyBonusAccentOptions = emptySet(),
             setupState = NewGameSetupState(),
             existingGames = emptyList(),
             appScreen = AppScreen.Home,
@@ -61,7 +70,8 @@ class GameViewModel : ViewModel() {
         turnStartState = state
         hasPendingTurnChanges = false
         stagedActions = emptyList()
-        pendingSlideCandidates = emptyList()
+        clearHarmonyBonusState()
+        clearStagedHarmonyUndoState()
         _uiState.value = state.toUiState(
             log = _uiState.value.eventLog + "Resumed ${persisted.title}.",
             selectedTileType = null,
@@ -71,7 +81,9 @@ class GameViewModel : ViewModel() {
             selectedTarget = null,
             legalTargets = emptySet(),
             stagedActions = emptyList(),
-            pendingBonusChoices = emptyList(),
+            isHarmonyBonusFlow = false,
+            harmonyBonusFlowerOptions = emptySet(),
+            harmonyBonusAccentOptions = emptySet(),
             setupState = _uiState.value.setupState,
             existingGames = _uiState.value.existingGames,
             appScreen = AppScreen.Game,
@@ -145,7 +157,8 @@ class GameViewModel : ViewModel() {
             aiAccentLoadout = setup.selectedAccents,
         )
         state = GameState.initial(config)
-        pendingSlideCandidates = emptyList()
+        clearHarmonyBonusState()
+        clearStagedHarmonyUndoState()
         turnStartState = state
         hasPendingTurnChanges = false
         stagedActions = emptyList()
@@ -164,7 +177,9 @@ class GameViewModel : ViewModel() {
             selectedTarget = null,
             legalTargets = emptySet(),
             stagedActions = emptyList(),
-            pendingBonusChoices = emptyList(),
+            isHarmonyBonusFlow = false,
+            harmonyBonusFlowerOptions = emptySet(),
+            harmonyBonusAccentOptions = emptySet(),
             setupState = setup,
             existingGames = updatedExistingGames,
             appScreen = AppScreen.Game,
@@ -175,8 +190,18 @@ class GameViewModel : ViewModel() {
 
     fun onPositionSelected(position: Position) {
         if (state.phase == GamePhase.FINISHED || state.currentPlayer != Player.HUMAN) return
-        if (pendingSlideCandidates.isNotEmpty()) {
-            appendLog("Select a Harmony bonus option before continuing.")
+        if (isHarmonyBonusPending()) {
+            val ui = _uiState.value
+            val matches = harmonyBonusMatches(
+                tileType = ui.selectedTileType,
+                accentType = ui.selectedAccentType,
+            )
+            val selectedMove = matches.firstOrNull { bonusTargetPosition(it) == position }
+            if (selectedMove != null && position in ui.legalTargets) {
+                tryApplyHumanMove(selectedMove)
+            } else {
+                appendLog("Harmony formed. Select a reserve tile for the bonus, then pick a highlighted target.")
+            }
             return
         }
         val currentUi = _uiState.value
@@ -206,7 +231,24 @@ class GameViewModel : ViewModel() {
     }
 
     fun selectFlowerReserveTile(tileType: TileType) {
-        if (pendingSlideCandidates.isNotEmpty()) return
+        if (isHarmonyBonusPending()) {
+            val matches = harmonyBonusMatches(tileType = tileType, accentType = null)
+            if (matches.isEmpty()) {
+                appendLog("That flower tile is not legal for this Harmony bonus.")
+                return
+            }
+            val legalTargets = matches.mapNotNull { bonusTargetPosition(it) }.toSet()
+            _uiState.update {
+                it.copy(
+                    selectedTileType = tileType,
+                    selectedAccentType = null,
+                    selectedSource = null,
+                    selectedTarget = null,
+                    legalTargets = legalTargets,
+                )
+            }
+            return
+        }
         if (state.currentPlayer != Player.HUMAN || _uiState.value.isAwaitingSubmit) return
         val reserve = state.reserveFor(Player.HUMAN)
         val count = if (tileType.isBasic) reserve.basicCount(tileType) else reserve.specialCount(tileType)
@@ -224,7 +266,24 @@ class GameViewModel : ViewModel() {
     }
 
     fun selectAccentReserveTile(accentType: AccentType) {
-        if (pendingSlideCandidates.isNotEmpty()) return
+        if (isHarmonyBonusPending()) {
+            val matches = harmonyBonusMatches(tileType = null, accentType = accentType)
+            if (matches.isEmpty()) {
+                appendLog("That accent tile is not legal for this Harmony bonus.")
+                return
+            }
+            val legalTargets = matches.mapNotNull { bonusTargetPosition(it) }.toSet()
+            _uiState.update {
+                it.copy(
+                    selectedAccentType = accentType,
+                    selectedTileType = null,
+                    selectedSource = null,
+                    selectedTarget = null,
+                    legalTargets = legalTargets,
+                )
+            }
+            return
+        }
         if (state.currentPlayer != Player.HUMAN || _uiState.value.isAwaitingSubmit) return
         val count = state.reserveFor(Player.HUMAN).accentCount(accentType)
         if (count <= 0) return
@@ -238,19 +297,6 @@ class GameViewModel : ViewModel() {
             )
         }
         appendLog("Accent ${accentCode(accentType)} selected. Form a new Harmony and choose a bonus action.")
-    }
-
-    fun choosePendingBonusChoice(index: Int) {
-        val selected = pendingSlideCandidates.getOrNull(index) ?: return
-        pendingSlideCandidates = emptyList()
-        tryApplyHumanMove(selected)
-    }
-
-    fun cancelPendingBonusSelection() {
-        if (pendingSlideCandidates.isEmpty()) return
-        pendingSlideCandidates = emptyList()
-        appendLog("Cancelled Harmony bonus selection.")
-        publishState(clearSelection = true)
     }
 
     fun submitTurn() {
@@ -271,17 +317,45 @@ class GameViewModel : ViewModel() {
         hasPendingTurnChanges = false
         turnStartState = state
         stagedActions = emptyList()
-        pendingSlideCandidates = emptyList()
+        clearHarmonyBonusState()
+        clearStagedHarmonyUndoState()
         syncPersistedGames(_uiState.value.existingGames)
         publishState(clearSelection = true)
     }
 
     fun undoTurn() {
+        if (isHarmonyBonusPending()) {
+            state = pendingHarmonyStartState ?: state
+            turnStartState = state
+            hasPendingTurnChanges = false
+            stagedActions = emptyList()
+            clearHarmonyBonusState()
+            clearStagedHarmonyUndoState()
+            appendLog("Harmony bonus selection cleared.")
+            syncPersistedGames(_uiState.value.existingGames)
+            publishState(clearSelection = true)
+            return
+        }
+        val harmonyUndo = stagedHarmonyUndoState
+        if (harmonyUndo != null) {
+            state = harmonyUndo.startState
+            turnStartState = state
+            hasPendingTurnChanges = false
+            stagedActions = emptyList()
+            pendingHarmonySlideCandidates = harmonyUndo.candidates
+            pendingHarmonyStartState = harmonyUndo.startState
+            clearStagedHarmonyUndoState()
+            appendLog("Returned to Harmony bonus selection.")
+            syncPersistedGames(_uiState.value.existingGames)
+            publishState(clearSelection = true)
+            return
+        }
         if (!hasPendingTurnChanges) return
         state = turnStartState
         hasPendingTurnChanges = false
         stagedActions = emptyList()
-        pendingSlideCandidates = emptyList()
+        clearHarmonyBonusState()
+        clearStagedHarmonyUndoState()
         appendLog("Undid staged turn changes.")
         syncPersistedGames(_uiState.value.existingGames)
         publishState(clearSelection = true)
@@ -297,20 +371,23 @@ class GameViewModel : ViewModel() {
             appendLog("No legal arrange move from source to target.")
             return
         }
-        val orderedCandidates = orderSlideCandidates(candidates, _uiState.value.selectedAccentType)
-        if (orderedCandidates.size == 1) {
-            tryApplyHumanMove(orderedCandidates.first())
+        val bonusCandidates = candidates.filter { it.bonus != null }.distinctBy { it.bonus }
+        if (bonusCandidates.isEmpty()) {
+            tryApplyHumanMove(candidates.first())
             return
         }
-        pendingSlideCandidates = orderedCandidates
-        appendLog("Harmony formed. Choose a bonus action.")
-        publishState(clearSelection = false)
+        pendingHarmonySlideCandidates = bonusCandidates
+        pendingHarmonyStartState = state
+        clearStagedHarmonyUndoState()
+        appendLog("Harmony formed. Select a reserve tile to choose your bonus.")
+        publishState(clearSelection = true)
         _uiState.update {
             it.copy(
                 selectedSource = source,
                 selectedTarget = target,
                 legalTargets = emptySet(),
                 selectedTileType = null,
+                selectedAccentType = null,
             )
         }
     }
@@ -327,6 +404,16 @@ class GameViewModel : ViewModel() {
     }
 
     private fun tryApplyHumanMove(move: Move) {
+        val harmonyUndoState = if (isHarmonyBonusPending()) {
+            val start = pendingHarmonyStartState
+            if (start != null && pendingHarmonySlideCandidates.isNotEmpty()) {
+                HarmonyUndoState(startState = start, candidates = pendingHarmonySlideCandidates)
+            } else {
+                null
+            }
+        } else {
+            null
+        }
         val legal = Rules.legalMoves(state)
         if (move !in legal) {
             appendLog("Illegal move rejected: $move")
@@ -338,7 +425,8 @@ class GameViewModel : ViewModel() {
         val stagedLabel = move.toStagedActionLabel(turnStartState)
         stagedActions = stagedActions + stagedLabel
         appendLog("Staged move: $stagedLabel")
-        pendingSlideCandidates = emptyList()
+        clearHarmonyBonusState()
+        stagedHarmonyUndoState = harmonyUndoState
         hasPendingTurnChanges = true
         publishState(clearSelection = true)
     }
@@ -348,7 +436,8 @@ class GameViewModel : ViewModel() {
         turnStartState = state
         hasPendingTurnChanges = false
         stagedActions = emptyList()
-        pendingSlideCandidates = emptyList()
+        clearHarmonyBonusState()
+        clearStagedHarmonyUndoState()
         syncPersistedGames(_uiState.value.existingGames)
         _uiState.value = state.toUiState(
             log = listOf("Game reset."),
@@ -359,7 +448,9 @@ class GameViewModel : ViewModel() {
             selectedTarget = null,
             legalTargets = emptySet(),
             stagedActions = emptyList(),
-            pendingBonusChoices = emptyList(),
+            isHarmonyBonusFlow = false,
+            harmonyBonusFlowerOptions = emptySet(),
+            harmonyBonusAccentOptions = emptySet(),
             setupState = _uiState.value.setupState,
             existingGames = _uiState.value.existingGames,
             appScreen = AppScreen.Game,
@@ -385,9 +476,9 @@ class GameViewModel : ViewModel() {
             selectedTarget = target,
             legalTargets = legalTargets,
             stagedActions = stagedActions,
-            pendingBonusChoices = pendingSlideCandidates.mapIndexed { index, slide ->
-                BonusChoiceUi(index = index, label = bonusChoiceLabel(slide.bonus))
-            },
+            isHarmonyBonusFlow = isHarmonyBonusPending(),
+            harmonyBonusFlowerOptions = harmonyBonusFlowerOptions(),
+            harmonyBonusAccentOptions = harmonyBonusAccentOptions(),
             setupState = _uiState.value.setupState,
             existingGames = currentExisting,
             appScreen = _uiState.value.appScreen,
@@ -408,7 +499,9 @@ class GameViewModel : ViewModel() {
         selectedTarget: Position?,
         legalTargets: Set<Position>,
         stagedActions: List<String>,
-        pendingBonusChoices: List<BonusChoiceUi>,
+        isHarmonyBonusFlow: Boolean,
+        harmonyBonusFlowerOptions: Set<TileType>,
+        harmonyBonusAccentOptions: Set<AccentType>,
         setupState: NewGameSetupState,
         existingGames: List<ExistingGameSummary>,
         appScreen: AppScreen,
@@ -427,13 +520,15 @@ class GameViewModel : ViewModel() {
         currentPlayer = if (isAwaitingSubmit) Player.HUMAN else currentPlayer,
         isAwaitingSubmit = isAwaitingSubmit,
         canSubmitTurn = isAwaitingSubmit,
-        canUndoTurn = isAwaitingSubmit,
-        canInteract = !isAwaitingSubmit && pendingBonusChoices.isEmpty() && winner == null && !isDraw && phase != GamePhase.FINISHED && currentPlayer == Player.HUMAN,
+        canUndoTurn = isAwaitingSubmit || isHarmonyBonusFlow,
+        canInteract = !isAwaitingSubmit && winner == null && !isDraw && phase != GamePhase.FINISHED && currentPlayer == Player.HUMAN,
         selectedSource = selectedSource,
         selectedTarget = selectedTarget,
         legalTargets = legalTargets,
         stagedActions = stagedActions,
-        pendingBonusChoices = pendingBonusChoices,
+        isHarmonyBonusFlow = isHarmonyBonusFlow,
+        harmonyBonusFlowerOptions = harmonyBonusFlowerOptions,
+        harmonyBonusAccentOptions = harmonyBonusAccentOptions,
         legalPositions = rules.legalPositions,
         zoneByPosition = rules.zoneByPosition,
         boardVisualConfig = defaultBoardVisualConfig(),
@@ -456,6 +551,10 @@ class GameViewModel : ViewModel() {
     }
 
     private fun selectSourceFlower(position: Position) {
+        if (isHarmonyBonusPending()) {
+            appendLog("Harmony formed. Select a reserve tile to choose your bonus.")
+            return
+        }
         val legalTargets = Rules.legalMovesFrom(state, position).map { it.target }.toSet()
         _uiState.update {
             it.copy(
@@ -467,6 +566,43 @@ class GameViewModel : ViewModel() {
             )
         }
     }
+
+    private fun isHarmonyBonusPending(): Boolean = pendingHarmonySlideCandidates.isNotEmpty()
+
+    private fun harmonyBonusMatches(
+        tileType: TileType?,
+        accentType: AccentType?,
+    ): List<Move.Slide> {
+        return pendingHarmonySlideCandidates.filter { candidate ->
+            when (val bonus = candidate.bonus) {
+                is BonusAction.PlantBonus -> tileType != null && bonus.tileType == tileType
+                is BonusAction.PlaceAccent -> accentType != null && bonus.type == accentType
+                is BonusAction.BoatMove,
+                is BonusAction.BoatRemoveAccent -> accentType == AccentType.BOAT
+                null -> false
+            }
+        }
+    }
+
+    private fun bonusTargetPosition(move: Move.Slide): Position? = when (val bonus = move.bonus) {
+        is BonusAction.PlaceAccent -> bonus.target
+        is BonusAction.PlantBonus -> bonus.gate
+        is BonusAction.BoatMove -> bonus.destination
+        is BonusAction.BoatRemoveAccent -> bonus.targetAccent
+        null -> null
+    }
+
+    private fun harmonyBonusFlowerOptions(): Set<TileType> =
+        pendingHarmonySlideCandidates.mapNotNull { (it.bonus as? BonusAction.PlantBonus)?.tileType }.toSet()
+
+    private fun harmonyBonusAccentOptions(): Set<AccentType> =
+        pendingHarmonySlideCandidates.mapNotNull { move ->
+            when (val bonus = move.bonus) {
+                is BonusAction.PlaceAccent -> bonus.type
+                is BonusAction.BoatMove, is BonusAction.BoatRemoveAccent -> AccentType.BOAT
+                else -> null
+            }
+        }.toSet()
 
     private fun legalPlantTargets(tileType: TileType): Set<Position> {
         return Rules.legalMoves(state)
@@ -509,30 +645,6 @@ class GameViewModel : ViewModel() {
         is BonusAction.BoatRemoveAccent -> "Boat remove accent at (${bonus.targetAccent.row}, ${bonus.targetAccent.col})"
     }
 
-    private fun bonusChoiceLabel(bonus: BonusAction?): String =
-        if (bonus == null) "No bonus" else bonusLabel(bonus)
-
-    private fun orderSlideCandidates(
-        candidates: List<Move.Slide>,
-        selectedAccentType: AccentType?,
-    ): List<Move.Slide> {
-        val distinct = candidates.distinctBy { it.bonus }
-        if (selectedAccentType == null) {
-            return distinct.sortedBy { if (it.bonus == null) 0 else 1 }
-        }
-        val preferred = distinct.filter { it.bonus.matchesAccent(selectedAccentType) }
-        val noBonus = distinct.filter { it.bonus == null }
-        val others = distinct.filterNot { it in preferred || it in noBonus }
-        return (preferred + noBonus + others).distinct()
-    }
-
-    private fun BonusAction?.matchesAccent(type: AccentType): Boolean = when (this) {
-        is BonusAction.PlaceAccent -> this.type == type
-        is BonusAction.BoatMove -> type == AccentType.BOAT
-        is BonusAction.BoatRemoveAccent -> type == AccentType.BOAT
-        else -> false
-    }
-
     private fun tileCode(tile: TileType): String = when (tile) {
         TileType.ROSE -> "R3"
         TileType.CHRYSANTHEMUM -> "R4"
@@ -549,6 +661,15 @@ class GameViewModel : ViewModel() {
         AccentType.KNOTWEED -> "KW"
         AccentType.WHEEL -> "WH"
         AccentType.ROCK -> "ST"
+    }
+
+    private fun clearHarmonyBonusState() {
+        pendingHarmonySlideCandidates = emptyList()
+        pendingHarmonyStartState = null
+    }
+
+    private fun clearStagedHarmonyUndoState() {
+        stagedHarmonyUndoState = null
     }
 
     private fun defaultRulesConfig(): RulesConfig = RulesConfig(
