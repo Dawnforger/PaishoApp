@@ -17,6 +17,8 @@ class RulesTest {
         assertEquals(Player.HUMAN, state.currentPlayer)
         assertEquals(TileType.ROSE, state.flowers.first { it.owner == Player.HUMAN }.type)
         assertEquals(TileType.ROSE, state.flowers.first { it.owner == Player.AI }.type)
+        assertEquals(Position(-8, 0), state.flowers.first { it.owner == Player.HUMAN }.position)
+        assertEquals(Position(8, 0), state.flowers.first { it.owner == Player.AI }.position)
 
         val plantMoves = Rules.legalMoves(state).filterIsInstance<Move.Plant>()
         assertTrue(plantMoves.isNotEmpty())

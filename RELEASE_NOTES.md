@@ -1,5 +1,13 @@
 # Release Notes
 
+## v0.0.10
+
+- Added explicit Harmony bonus selection UX: when an Arrange forms Harmony, players now choose the exact bonus action to stage.
+- Enabled practical accent-bonus execution by exposing selectable bonus options (including accent actions) instead of implicit fallback behavior.
+- Updated traditional opening orientation defaults to host at bottom gate and guest at top gate.
+- Moved Submit/Undo controls above reserve tiles while keeping the game log at the bottom for faster turn submission flow.
+- Updated app version metadata and in-app labels for v0.0.10.
+
 ## v0.0.09
 
 - Rebuilt board rendering with a single pixel-space coordinate transform for taps, highlights, grid, and token centers.
@@ -78,4 +86,5 @@
   - `v0.0.07`
   - `v0.0.08`
   - `v0.0.09`
+  - `v0.0.10`
   - ...
