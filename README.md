@@ -7,10 +7,10 @@ Native Android app for playing Skud Pai Sho with:
 
 ## Release
 
-- Current release: **v0.0.11**
-- Versioning policy: increment patch as **0.0.0x** per release (`v0.0.01`, `v0.0.02`, `v0.0.03`, `v0.0.04`, `v0.0.05`, `v0.0.06`, `v0.0.07`, `v0.0.08`, `v0.0.09`, `v0.0.10`, `v0.0.11`, ...)
+- Current release: **v0.0.12**
+- Versioning policy: increment patch as **0.0.0x** per release (`v0.0.01`, `v0.0.02`, `v0.0.03`, `v0.0.04`, `v0.0.05`, `v0.0.06`, `v0.0.07`, `v0.0.08`, `v0.0.09`, `v0.0.10`, `v0.0.11`, `v0.0.12`, ...)
 
-## Current implementation (v0.0.11)
+## Current implementation (v0.0.12)
 
 This repository includes a native Android project written in Kotlin + Jetpack Compose with:
 
@@ -27,6 +27,7 @@ This repository includes a native Android project written in Kotlin + Jetpack Co
 - Board rendering rewritten around a single pixel-space geometry transform so intersections, highlights, hit-testing, and piece centers align from one source of truth
 - Harmony bonus selection UI and logic for arrange moves that create new Harmony outcomes
 - Reserve-driven Harmony bonus flow (no giant action list): choose legal reserve tile, then highlighted legal target
+- Wheel accent rotation corrected to the intended clockwise behavior
 - Traditional opening gate orientation (host bottom, guest top) and quicker turn controls layout
 - Unit tests for core rule transitions and legality scenarios
 

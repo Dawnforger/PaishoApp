@@ -315,6 +315,10 @@ object Rules {
         return legalBonusActions(stateAfterSlide)
     }
 
+    // Test-only hook to verify accent bonus behavior (e.g., wheel rotation direction).
+    internal fun applyBonusActionForTest(state: GameState, bonus: BonusAction): GameState =
+        applyBonusAction(state, bonus)
+
     private fun allBoardPositions(state: GameState): List<Position> = state.rules.legalPositions.toList()
 
     private fun applyPlant(state: GameState, move: Move.Plant): GameState {
@@ -413,7 +417,8 @@ object Rules {
         if (wheel.type != AccentType.WHEEL) return state
 
         val around = clockwise8.map { Position(wheelCenter.row + it.row, wheelCenter.col + it.col) }
-        val mapping = around.zip(around.drop(1) + around.take(1)).toMap()
+        // Move each surrounding point one step clockwise around the wheel center.
+        val mapping = around.zip(around.takeLast(1) + around.dropLast(1)).toMap()
 
         val flowersByPos = state.flowers.associateBy { it.position }
         val accentsByPos = state.accents.associateBy { it.position }
