@@ -2,6 +2,8 @@
 
 package com.paisho.app.ui
 
+import android.graphics.Paint
+import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -47,16 +49,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
@@ -430,15 +432,14 @@ private fun CircularBoard(
     cells: Map<Position, String>
 ) {
     val boardSizeDp = 360.dp
-    val pointTouchRadius = 11.dp
-    val pieceRadius = 12.dp
-    val pointVisualRadius = 2.4.dp
-    val boardRadiusFraction = 0.515f
-    val playableRadiusFraction = 0.985f
-    val anchorRadius = if (pieceRadius > pointTouchRadius) pieceRadius else pointTouchRadius
+    val boardRadiusFraction = 0.495f
+    val playableRadiusFraction = 0.975f
 
     val allPoints = legalPositions.sortedWith(compareByDescending<Position> { it.row }.thenBy { it.col })
     val interactivePoints = (legalTargets + selectedSource + selectedTarget).filterNotNull().toSet()
+
+    val sourceHighlightColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+    val targetHighlightColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
 
     Box(
         modifier = Modifier
@@ -449,7 +450,7 @@ private fun CircularBoard(
                     val center = Offset(size.width / 2f, size.height / 2f)
                     val boardRadius = sizePx * boardRadiusFraction
                     val playableRadius = boardRadius * playableRadiusFraction
-                    val step = if (coordinateExtent == 0) 0f else (boardRadius * 0.90f) / coordinateExtent.toFloat()
+                    val step = if (coordinateExtent == 0) 0f else (boardRadius * 0.86f) / coordinateExtent.toFloat()
                     val dx = tapOffset.x - center.x
                     val dy = tapOffset.y - center.y
                     if (dx * dx + dy * dy > playableRadius * playableRadius) return@detectTapGestures
@@ -469,8 +470,7 @@ private fun CircularBoard(
                             closest = point
                         }
                     }
-                    // Tight snapping: only accept taps close to a legal intersection marker.
-                    val snapRadiusPx = maxOf((sizePx / boardSize) * 0.28f, step * 0.45f)
+                    val snapRadiusPx = maxOf(step * 0.55f, 14f)
                     if (closest != null && closestDistance <= snapRadiusPx) {
                         onTileClick(closest)
                     }
@@ -483,7 +483,10 @@ private fun CircularBoard(
             val sizePx = min(size.width, size.height)
             val center = Offset(size.width / 2f, size.height / 2f)
             val radius = sizePx * boardRadiusFraction
-            val step = if (coordinateExtent == 0) 0f else (radius * 0.90f) / coordinateExtent.toFloat()
+            val step = if (coordinateExtent == 0) 0f else (radius * 0.86f) / coordinateExtent.toFloat()
+            val markerRadius = maxOf(step * 0.12f, 2f)
+            val pieceRadiusPx = maxOf(step * 0.37f, 8f)
+            val anchorRadiusPx = maxOf(step * 0.46f, pieceRadiusPx + 1f)
 
             drawCircle(color = Color(0xFF3A3638), radius = radius, center = center, style = Fill)
             drawCircle(color = Color(0xFFD8D0C9), radius = radius * 0.975f, center = center, style = Fill)
@@ -568,58 +571,52 @@ private fun CircularBoard(
                     x = center.x + point.col * step,
                     y = center.y - point.row * step,
                 )
-                drawCircle(color = Color(0xFF1F1A1B), radius = pointVisualRadius.toPx(), center = marker)
+                drawCircle(color = Color(0xFF1F1A1B), radius = markerRadius, center = marker)
             }
             drawCircle(color = Color(0xFF2D2527), radius = radius * 0.998f, center = center, style = Stroke(width = 4f))
-        }
 
-        allPoints.forEach { position ->
-            val token = cells[position].orEmpty()
-            val isSource = selectedSource == position
-            val isTarget = selectedTarget == position
-            val isLegalTarget = position in legalTargets
-            val isInteractiveHint = position in interactivePoints
-            if (token.isEmpty() && !isSource && !isTarget && !isLegalTarget && !isInteractiveHint) return@forEach
+            // Draw selection/interaction highlights and piece tokens from the same pixel geometry.
+            val textPaint = Paint().apply {
+                isAntiAlias = true
+                color = android.graphics.Color.WHITE
+                textAlign = Paint.Align.CENTER
+                textSize = pieceRadiusPx * 0.95f
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            }
 
-            val stepDp = if (coordinateExtent == 0) 0.dp else boardSizeDp * (boardRadiusFraction * 0.90f / coordinateExtent.toFloat())
-            val x = boardSizeDp / 2 + (stepDp * position.col)
-            val y = boardSizeDp / 2 - (stepDp * position.row)
+            for (position in allPoints) {
+                val token = cells[position].orEmpty()
+                val isSource = selectedSource == position
+                val isTarget = selectedTarget == position
+                val isLegalTarget = position in legalTargets
+                val isInteractiveHint = position in interactivePoints
+                if (token.isEmpty() && !isSource && !isTarget && !isLegalTarget && !isInteractiveHint) continue
 
-            val pieceCode = tokenCodeFromSnapshot(token)
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .offset(x = x - anchorRadius, y = y - anchorRadius)
-                    .size(anchorRadius * 2)
-                    .background(
-                        when {
-                            isSource -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                            isTarget -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
-                            isLegalTarget -> Color(0x8042A85A)
-                            isInteractiveHint -> Color(0x22000000)
-                            else -> Color.Transparent
-                        },
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
+                val p = Offset(
+                    x = center.x + position.col * step,
+                    y = center.y - position.row * step,
+                )
+                val highlightColor = when {
+                    isSource -> sourceHighlightColor
+                    isTarget -> targetHighlightColor
+                    isLegalTarget -> Color(0x8042A85A)
+                    isInteractiveHint -> Color(0x22000000)
+                    else -> Color.Transparent
+                }
+                if (highlightColor != Color.Transparent) {
+                    drawCircle(color = highlightColor, radius = anchorRadiusPx, center = p, style = Fill)
+                }
+
+                val pieceCode = tokenCodeFromSnapshot(token)
                 if (pieceCode != null) {
                     val isAiPiece = token.startsWith("A")
                     val pieceFill = if (isAiPiece) Color(0xFFB74B4B) else Color(0xFF3B66A6)
                     val pieceStroke = if (isAiPiece) Color(0xFF4A0D0F) else Color(0xFF0F2342)
-                    Box(
-                        modifier = Modifier
-                            .size(pieceRadius * 2)
-                            .background(color = pieceFill, shape = CircleShape)
-                            .border(width = 1.5.dp, color = pieceStroke, shape = CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = pieceCode,
-                            color = Color.White,
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.labelSmall
-                        )
+                    drawCircle(color = pieceFill, radius = pieceRadiusPx, center = p, style = Fill)
+                    drawCircle(color = pieceStroke, radius = pieceRadiusPx, center = p, style = Stroke(width = 2f))
+                    drawIntoCanvas { canvas ->
+                        val baseline = p.y - (textPaint.ascent() + textPaint.descent()) / 2f
+                        canvas.nativeCanvas.drawText(pieceCode, p.x, baseline, textPaint)
                     }
                 }
             }
