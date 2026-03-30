@@ -335,6 +335,7 @@ fun GameScreen(viewModel: GameViewModel) {
                         GameEndReason.FORCED_DRAW -> "Game ended in a forced draw."
                         null -> "Game finished."
                     }
+                    state.pendingBonusChoices.isNotEmpty() -> "Harmony formed. Choose a bonus action to stage the move."
                     state.isAwaitingSubmit -> "Turn action staged. Submit to finalize turn or Undo to revert."
                     state.selectedSource != null -> {
                         val source = state.selectedSource
@@ -346,6 +347,57 @@ fun GameScreen(viewModel: GameViewModel) {
                 },
                 style = MaterialTheme.typography.bodyMedium
             )
+        }
+
+        item {
+            if (state.pendingBonusChoices.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "Harmony bonus choices",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        state.pendingBonusChoices.forEach { choice ->
+                            Button(
+                                onClick = { viewModel.choosePendingBonusChoice(choice.index) },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(choice.label)
+                            }
+                        }
+                        TextButton(onClick = viewModel::cancelPendingBonusSelection) {
+                            Text("Cancel bonus selection")
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = viewModel::undoTurn,
+                    enabled = state.canUndoTurn && !state.isGameOver
+                ) {
+                    Text("Undo")
+                }
+                Button(
+                    onClick = viewModel::submitTurn,
+                    enabled = state.canSubmitTurn && !state.isGameOver
+                ) {
+                    Text("Submit")
+                }
+                Button(onClick = viewModel::resetGame) {
+                    Text("Reset")
+                }
+            }
         }
 
         item {
@@ -380,26 +432,6 @@ fun GameScreen(viewModel: GameViewModel) {
                 onFlowerClick = viewModel::selectFlowerReserveTile,
                 onAccentClick = viewModel::selectAccentReserveTile
             )
-        }
-
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = viewModel::undoTurn,
-                    enabled = state.canUndoTurn && !state.isGameOver
-                ) {
-                    Text("Undo")
-                }
-                Button(
-                    onClick = viewModel::submitTurn,
-                    enabled = state.canSubmitTurn && !state.isGameOver
-                ) {
-                    Text("Submit")
-                }
-                Button(onClick = viewModel::resetGame) {
-                    Text("Reset")
-                }
-            }
         }
 
         item {

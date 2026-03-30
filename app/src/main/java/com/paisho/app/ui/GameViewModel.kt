@@ -26,7 +26,7 @@ class GameViewModel : ViewModel() {
     private var stagedActions: List<String> = emptyList()
     private val persistedGames = mutableMapOf<String, PersistedGame>()
     private var currentGameId: String? = null
-    private var pendingBonus: BonusAction? = null
+    private var pendingSlideCandidates: List<Move.Slide> = emptyList()
     private val _uiState = MutableStateFlow(
         state.toUiState(
             log = listOf("Skud Pai Sho v0.0.09 - full rules engine enabled."),
@@ -37,6 +37,7 @@ class GameViewModel : ViewModel() {
             selectedTarget = null,
             legalTargets = emptySet(),
             stagedActions = emptyList(),
+            pendingBonusChoices = emptyList(),
             setupState = NewGameSetupState(),
             existingGames = emptyList(),
             appScreen = AppScreen.Home,
@@ -60,7 +61,7 @@ class GameViewModel : ViewModel() {
         turnStartState = state
         hasPendingTurnChanges = false
         stagedActions = emptyList()
-        pendingBonus = null
+        pendingSlideCandidates = emptyList()
         _uiState.value = state.toUiState(
             log = _uiState.value.eventLog + "Resumed ${persisted.title}.",
             selectedTileType = null,
@@ -70,6 +71,7 @@ class GameViewModel : ViewModel() {
             selectedTarget = null,
             legalTargets = emptySet(),
             stagedActions = emptyList(),
+            pendingBonusChoices = emptyList(),
             setupState = _uiState.value.setupState,
             existingGames = _uiState.value.existingGames,
             appScreen = AppScreen.Game,
@@ -143,7 +145,7 @@ class GameViewModel : ViewModel() {
             aiAccentLoadout = setup.selectedAccents,
         )
         state = GameState.initial(config)
-        pendingBonus = null
+        pendingSlideCandidates = emptyList()
         turnStartState = state
         hasPendingTurnChanges = false
         stagedActions = emptyList()
@@ -162,6 +164,7 @@ class GameViewModel : ViewModel() {
             selectedTarget = null,
             legalTargets = emptySet(),
             stagedActions = emptyList(),
+            pendingBonusChoices = emptyList(),
             setupState = setup,
             existingGames = updatedExistingGames,
             appScreen = AppScreen.Game,
@@ -172,6 +175,10 @@ class GameViewModel : ViewModel() {
 
     fun onPositionSelected(position: Position) {
         if (state.phase == GamePhase.FINISHED || state.currentPlayer != Player.HUMAN) return
+        if (pendingSlideCandidates.isNotEmpty()) {
+            appendLog("Select a Harmony bonus option before continuing.")
+            return
+        }
         val currentUi = _uiState.value
         if (!currentUi.canInteract) return
         val tappedFlower = state.flowerAt(position)
@@ -199,6 +206,7 @@ class GameViewModel : ViewModel() {
     }
 
     fun selectFlowerReserveTile(tileType: TileType) {
+        if (pendingSlideCandidates.isNotEmpty()) return
         if (state.currentPlayer != Player.HUMAN || _uiState.value.isAwaitingSubmit) return
         val reserve = state.reserveFor(Player.HUMAN)
         val count = if (tileType.isBasic) reserve.basicCount(tileType) else reserve.specialCount(tileType)
@@ -216,6 +224,7 @@ class GameViewModel : ViewModel() {
     }
 
     fun selectAccentReserveTile(accentType: AccentType) {
+        if (pendingSlideCandidates.isNotEmpty()) return
         if (state.currentPlayer != Player.HUMAN || _uiState.value.isAwaitingSubmit) return
         val count = state.reserveFor(Player.HUMAN).accentCount(accentType)
         if (count <= 0) return
@@ -228,7 +237,20 @@ class GameViewModel : ViewModel() {
                 legalTargets = emptySet(),
             )
         }
-        appendLog("Accent tiles are triggered via bonus actions after forming a Harmony.")
+        appendLog("Accent ${accentCode(accentType)} selected. Form a new Harmony and choose a bonus action.")
+    }
+
+    fun choosePendingBonusChoice(index: Int) {
+        val selected = pendingSlideCandidates.getOrNull(index) ?: return
+        pendingSlideCandidates = emptyList()
+        tryApplyHumanMove(selected)
+    }
+
+    fun cancelPendingBonusSelection() {
+        if (pendingSlideCandidates.isEmpty()) return
+        pendingSlideCandidates = emptyList()
+        appendLog("Cancelled Harmony bonus selection.")
+        publishState(clearSelection = true)
     }
 
     fun submitTurn() {
@@ -249,6 +271,7 @@ class GameViewModel : ViewModel() {
         hasPendingTurnChanges = false
         turnStartState = state
         stagedActions = emptyList()
+        pendingSlideCandidates = emptyList()
         syncPersistedGames(_uiState.value.existingGames)
         publishState(clearSelection = true)
     }
@@ -256,9 +279,9 @@ class GameViewModel : ViewModel() {
     fun undoTurn() {
         if (!hasPendingTurnChanges) return
         state = turnStartState
-        pendingBonus = null
         hasPendingTurnChanges = false
         stagedActions = emptyList()
+        pendingSlideCandidates = emptyList()
         appendLog("Undid staged turn changes.")
         syncPersistedGames(_uiState.value.existingGames)
         publishState(clearSelection = true)
@@ -274,13 +297,22 @@ class GameViewModel : ViewModel() {
             appendLog("No legal arrange move from source to target.")
             return
         }
-        val selected = when {
-            candidates.any { it.bonus == pendingBonus } -> candidates.first { it.bonus == pendingBonus }
-            candidates.any { it.bonus == null } -> candidates.first { it.bonus == null }
-            else -> candidates.first()
+        val orderedCandidates = orderSlideCandidates(candidates, _uiState.value.selectedAccentType)
+        if (orderedCandidates.size == 1) {
+            tryApplyHumanMove(orderedCandidates.first())
+            return
         }
-        pendingBonus = selected.bonus
-        tryApplyHumanMove(selected)
+        pendingSlideCandidates = orderedCandidates
+        appendLog("Harmony formed. Choose a bonus action.")
+        publishState(clearSelection = false)
+        _uiState.update {
+            it.copy(
+                selectedSource = source,
+                selectedTarget = target,
+                legalTargets = emptySet(),
+                selectedTileType = null,
+            )
+        }
     }
 
     private fun tryStagePlant(tileType: TileType, gate: Position) {
@@ -306,7 +338,7 @@ class GameViewModel : ViewModel() {
         val stagedLabel = move.toStagedActionLabel(turnStartState)
         stagedActions = stagedActions + stagedLabel
         appendLog("Staged move: $stagedLabel")
-        pendingBonus = null
+        pendingSlideCandidates = emptyList()
         hasPendingTurnChanges = true
         publishState(clearSelection = true)
     }
@@ -316,7 +348,7 @@ class GameViewModel : ViewModel() {
         turnStartState = state
         hasPendingTurnChanges = false
         stagedActions = emptyList()
-        pendingBonus = null
+        pendingSlideCandidates = emptyList()
         syncPersistedGames(_uiState.value.existingGames)
         _uiState.value = state.toUiState(
             log = listOf("Game reset."),
@@ -327,6 +359,7 @@ class GameViewModel : ViewModel() {
             selectedTarget = null,
             legalTargets = emptySet(),
             stagedActions = emptyList(),
+            pendingBonusChoices = emptyList(),
             setupState = _uiState.value.setupState,
             existingGames = _uiState.value.existingGames,
             appScreen = AppScreen.Game,
@@ -352,6 +385,9 @@ class GameViewModel : ViewModel() {
             selectedTarget = target,
             legalTargets = legalTargets,
             stagedActions = stagedActions,
+            pendingBonusChoices = pendingSlideCandidates.mapIndexed { index, slide ->
+                BonusChoiceUi(index = index, label = bonusChoiceLabel(slide.bonus))
+            },
             setupState = _uiState.value.setupState,
             existingGames = currentExisting,
             appScreen = _uiState.value.appScreen,
@@ -372,6 +408,7 @@ class GameViewModel : ViewModel() {
         selectedTarget: Position?,
         legalTargets: Set<Position>,
         stagedActions: List<String>,
+        pendingBonusChoices: List<BonusChoiceUi>,
         setupState: NewGameSetupState,
         existingGames: List<ExistingGameSummary>,
         appScreen: AppScreen,
@@ -391,11 +428,12 @@ class GameViewModel : ViewModel() {
         isAwaitingSubmit = isAwaitingSubmit,
         canSubmitTurn = isAwaitingSubmit,
         canUndoTurn = isAwaitingSubmit,
-        canInteract = !isAwaitingSubmit && winner == null && !isDraw && phase != GamePhase.FINISHED && currentPlayer == Player.HUMAN,
+        canInteract = !isAwaitingSubmit && pendingBonusChoices.isEmpty() && winner == null && !isDraw && phase != GamePhase.FINISHED && currentPlayer == Player.HUMAN,
         selectedSource = selectedSource,
         selectedTarget = selectedTarget,
         legalTargets = legalTargets,
         stagedActions = stagedActions,
+        pendingBonusChoices = pendingBonusChoices,
         legalPositions = rules.legalPositions,
         zoneByPosition = rules.zoneByPosition,
         boardVisualConfig = defaultBoardVisualConfig(),
@@ -471,6 +509,30 @@ class GameViewModel : ViewModel() {
         is BonusAction.BoatRemoveAccent -> "Boat remove accent at (${bonus.targetAccent.row}, ${bonus.targetAccent.col})"
     }
 
+    private fun bonusChoiceLabel(bonus: BonusAction?): String =
+        if (bonus == null) "No bonus" else bonusLabel(bonus)
+
+    private fun orderSlideCandidates(
+        candidates: List<Move.Slide>,
+        selectedAccentType: AccentType?,
+    ): List<Move.Slide> {
+        val distinct = candidates.distinctBy { it.bonus }
+        if (selectedAccentType == null) {
+            return distinct.sortedBy { if (it.bonus == null) 0 else 1 }
+        }
+        val preferred = distinct.filter { it.bonus.matchesAccent(selectedAccentType) }
+        val noBonus = distinct.filter { it.bonus == null }
+        val others = distinct.filterNot { it in preferred || it in noBonus }
+        return (preferred + noBonus + others).distinct()
+    }
+
+    private fun BonusAction?.matchesAccent(type: AccentType): Boolean = when (this) {
+        is BonusAction.PlaceAccent -> this.type == type
+        is BonusAction.BoatMove -> type == AccentType.BOAT
+        is BonusAction.BoatRemoveAccent -> type == AccentType.BOAT
+        else -> false
+    }
+
     private fun tileCode(tile: TileType): String = when (tile) {
         TileType.ROSE -> "R3"
         TileType.CHRYSANTHEMUM -> "R4"
@@ -491,6 +553,8 @@ class GameViewModel : ViewModel() {
 
     private fun defaultRulesConfig(): RulesConfig = RulesConfig(
         openingBasicType = TileType.ROSE,
+        humanStartGate = Position(-8, 0),
+        aiStartGate = Position(8, 0),
         humanAccentLoadout = listOf(AccentType.ROCK, AccentType.WHEEL, AccentType.KNOTWEED, AccentType.BOAT),
         aiAccentLoadout = listOf(AccentType.ROCK, AccentType.WHEEL, AccentType.KNOTWEED, AccentType.BOAT),
     )

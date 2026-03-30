@@ -205,8 +205,9 @@ data class RulesConfig(
     val coordinateExtent: Int = SkudBoardLayout.COORD_EXTENT,
     val boardSize: Int = SkudBoardLayout.BOARD_DIAMETER,
     val openingBasicType: TileType = TileType.ROSE,
-    val humanStartGate: Position = Position(0, -SkudBoardLayout.COORD_EXTENT),
-    val aiStartGate: Position = Position(0, SkudBoardLayout.COORD_EXTENT),
+    // Traditional orientation: host at bottom gate, guest at top gate.
+    val humanStartGate: Position = Position(-SkudBoardLayout.COORD_EXTENT, 0),
+    val aiStartGate: Position = Position(SkudBoardLayout.COORD_EXTENT, 0),
     val legalPositions: Set<Position> = SkudBoardLayout.legalPositions,
     val zoneByPosition: Map<Position, BoardZone> = SkudBoardLayout.zoneByPosition,
     val gates: Set<Position> = SkudBoardLayout.gates,
