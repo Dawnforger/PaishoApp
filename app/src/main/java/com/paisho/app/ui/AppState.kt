@@ -54,11 +54,6 @@ data class NewGameSetupState(
             AccentType.entries.all { type -> selectedAccents.count { it == type } <= 2 }
 }
 
-data class BonusChoiceUi(
-    val index: Int,
-    val label: String,
-)
-
 data class GameUiState(
     val boardSize: Int = 9,
     val coordinateExtent: Int = 4,
@@ -78,7 +73,9 @@ data class GameUiState(
     val flowerReserveCounts: Map<TileType, Int> = emptyMap(),
     val accentReserveCounts: Map<AccentType, Int> = emptyMap(),
     val stagedActions: List<String> = emptyList(),
-    val pendingBonusChoices: List<BonusChoiceUi> = emptyList(),
+    val isHarmonyBonusFlow: Boolean = false,
+    val harmonyBonusFlowerOptions: Set<TileType> = emptySet(),
+    val harmonyBonusAccentOptions: Set<AccentType> = emptySet(),
     val boardSnapshot: Map<Position, String> = emptyMap(),
     val eventLog: List<String> = listOf("Welcome to Pai Sho."),
     val isGameOver: Boolean = false,

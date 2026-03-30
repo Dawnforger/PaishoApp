@@ -114,6 +114,32 @@ class RulesTest {
         assertTrue(Rules.legalMoves(state).contains(move))
     }
 
+    @Test
+    fun `harmony bonus options include only legal reserve-driven actions`() {
+        val base = GameState.initial().copy(
+            currentPlayer = Player.HUMAN,
+            flowers = listOf(
+                // Sliding tile 1 from (0,-2) to (0,-1) creates a new harmony with tile 2 at (0,1).
+                FlowerTile(1, Player.HUMAN, TileType.ROSE, Position(0, -2)),
+                FlowerTile(2, Player.HUMAN, TileType.CHRYSANTHEMUM, Position(0, 1)),
+                FlowerTile(3, Player.AI, TileType.JASMINE, Position(3, 0)),
+            ),
+            accents = emptyList(),
+            reserves = mapOf(
+                Player.HUMAN to GameState.initial().reserveFor(Player.HUMAN),
+                Player.AI to GameState.initial().reserveFor(Player.AI),
+            ),
+        )
+
+        val harmonySlides = Rules.legalMoves(base)
+            .filterIsInstance<Move.Slide>()
+            .filter { it.tileId == 1 && it.target == Position(0, -1) }
+
+        assertTrue(harmonySlides.any { it.bonus != null })
+        // Arrange-without-bonus is still legal; reserve-driven bonus selection is a UI flow choice.
+        assertTrue(harmonySlides.any { it.bonus == null })
+    }
+
     private fun stateWithNoBasic(player: Player): PlayerReserve {
         return GameState.initial().reserveFor(player).copy(
             basic = TileType.basicTypes.associateWith { 0 }
