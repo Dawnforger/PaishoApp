@@ -29,7 +29,7 @@ class GameViewModel : ViewModel() {
     private var pendingSlideCandidates: List<Move.Slide> = emptyList()
     private val _uiState = MutableStateFlow(
         state.toUiState(
-            log = listOf("Skud Pai Sho v0.0.09 - full rules engine enabled."),
+            log = listOf("Skud Pai Sho v0.0.10 - full rules engine enabled."),
             selectedTileType = null,
             selectedAccentType = null,
             isAwaitingSubmit = false,
