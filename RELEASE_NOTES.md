@@ -1,5 +1,12 @@
 # Release Notes
 
+## v0.0.11
+
+- Replaced Harmony bonus action list with reserve-driven bonus selection flow.
+- During Harmony bonus flow, selecting a legal reserve tile now highlights legal bonus targets directly on the board.
+- Undo now backs up to the beginning of Harmony bonus flow before submit, and can return to it after staging but before submitting.
+- Updated app version metadata and in-app labels for v0.0.11.
+
 ## v0.0.10
 
 - Added explicit Harmony bonus selection UX: when an Arrange forms Harmony, players now choose the exact bonus action to stage.
@@ -87,4 +94,5 @@
   - `v0.0.08`
   - `v0.0.09`
   - `v0.0.10`
+  - `v0.0.11`
   - ...
