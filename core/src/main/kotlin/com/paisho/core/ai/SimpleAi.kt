@@ -15,14 +15,23 @@ class SimpleAi(
     private val random: Random = Random.Default,
 ) {
     private val priors = LearnedMovePriors.default()
-    private val maxFullEvaluations = 160
+    private val maxFullEvaluations = 72
+    private val maxOpponentThreatChecks = 36
 
     fun chooseMove(state: GameState): Move? {
         if (state.currentPlayer != Player.AI || state.winner != null) return null
         val legalMoves = Rules.legalMoves(state)
         if (legalMoves.isEmpty()) return null
 
-        // When bonus branches explode, evaluate a policy-prior shortlist first to avoid UI timeouts.
+        val immediateWins = legalMoves.filter { move ->
+            val after = Rules.applyMove(state, move)
+            after.winner == Player.AI || Rules.hasHarmonyRing(after, Player.AI)
+        }
+        if (immediateWins.isNotEmpty()) {
+            return immediateWins.random(random)
+        }
+
+        // Keep search bounded in large branching states to avoid turn-time stalls.
         val candidates = if (legalMoves.size > maxFullEvaluations) {
             legalMoves
                 .map { move -> move to quickScore(state, move) }
@@ -40,9 +49,9 @@ class SimpleAi(
     }
 
     private fun quickScore(state: GameState, move: Move): Double {
-        var score = 0.0
+        var score = aggressiveMoveBias(state, move)
         when (move) {
-            is Move.Plant -> score += placementCentrality(move.target).toDouble()
+            is Move.Plant -> score += placementCentrality(move.target) * 0.5
             is Move.Slide -> score += placementCentrality(move.target).toDouble() + 2.0
         }
         score += policyPriorScore(state, move)
@@ -53,16 +62,10 @@ class SimpleAi(
         var score = quickScore(state, move)
 
         val next = Rules.applyMove(state, move)
-        val aiCount = next.flowers.count { it.owner == Player.AI }
-        val humanCount = next.flowers.count { it.owner == Player.HUMAN }
-        val aiHarmony = Rules.computeHarmonies(next).count { it.owner == Player.AI }
-        val humanHarmony = Rules.computeHarmonies(next).count { it.owner == Player.HUMAN }
-        score += aiCount * 3.0
-        score -= humanCount * 2.0
-        score += aiHarmony * 4.0
-        score -= humanHarmony * 3.0
-        if (Rules.hasHarmonyRing(next, Player.AI)) score += 20_000.0
-        if (next.winner == Player.AI) score += 10_000.0
+        score += strategicStateScore(next)
+        if (opponentHasImmediateWin(next)) score -= 250_000.0
+        if (next.winner == Player.AI) score += 1_000_000.0
+        if (next.winner == Player.HUMAN) score -= 1_000_000.0
         return score
     }
 
@@ -70,18 +73,114 @@ class SimpleAi(
         return 10 - (abs(position.row) + abs(position.col))
     }
 
+    private fun strategicStateScore(state: GameState): Double {
+        val aiFlowers = state.flowersFor(Player.AI)
+        val humanFlowers = state.flowersFor(Player.HUMAN)
+        val aiBlooming = aiFlowers.count { !state.isGate(it.position) }
+        val humanBlooming = humanFlowers.count { !state.isGate(it.position) }
+        val aiOnGate = aiFlowers.size - aiBlooming
+        val humanOnGate = humanFlowers.size - humanBlooming
+
+        val harmonies = Rules.computeHarmonies(state)
+        val aiHarmony = harmonies.count { it.owner == Player.AI }
+        val humanHarmony = harmonies.count { it.owner == Player.HUMAN }
+        val aiMidline = Rules.computeMidlineCrossingHarmonyCount(state, Player.AI)
+        val humanMidline = Rules.computeMidlineCrossingHarmonyCount(state, Player.HUMAN)
+
+        val aiMobility = Rules.legalMoves(state.copy(currentPlayer = Player.AI)).size
+        val humanMobility = Rules.legalMoves(state.copy(currentPlayer = Player.HUMAN)).size
+
+        var score = 0.0
+        score += (aiFlowers.size - humanFlowers.size) * 120.0
+        score += (aiBlooming - humanBlooming) * 160.0
+        score += aiHarmony * 320.0
+        score -= humanHarmony * 360.0
+        score += (aiMidline - humanMidline) * 120.0
+        score += (aiMobility - humanMobility) * 2.0
+        score -= aiOnGate * 35.0
+        score += humanOnGate * 25.0
+        if (Rules.hasHarmonyRing(state, Player.AI)) score += 300_000.0
+        if (Rules.hasHarmonyRing(state, Player.HUMAN)) score -= 300_000.0
+        return score
+    }
+
+    private fun aggressiveMoveBias(state: GameState, move: Move): Double {
+        val aiFlowers = state.flowersFor(Player.AI)
+        val aiBlooming = aiFlowers.count { !state.isGate(it.position) }
+
+        return when (move) {
+            is Move.Plant -> {
+                var score = 60.0
+                if (aiFlowers.size < 4) score += 180.0
+                if (aiBlooming < 3) score += 100.0
+                score
+            }
+            is Move.Slide -> {
+                var score = 20.0
+                val mover = state.flowers.firstOrNull { it.id == move.tileId }
+                if (mover != null && state.isGate(mover.position) && aiFlowers.size < 4) {
+                    // Early game: avoid repeatedly shuffling one opening tile from a gate.
+                    score -= 140.0
+                }
+                val target = state.flowerAt(move.target)
+                if (target != null && target.owner == Player.HUMAN) score += 220.0
+                if (move.bonus != null) score += 60.0
+                score
+            }
+        }
+    }
+
+    private fun opponentHasImmediateWin(stateAfterAiMove: GameState): Boolean {
+        if (stateAfterAiMove.phase != com.paisho.core.game.GamePhase.PLAYING) return false
+        val opponentMoves = Rules.legalMoves(stateAfterAiMove)
+        if (opponentMoves.isEmpty()) return false
+        val candidateReplies = if (opponentMoves.size > maxOpponentThreatChecks) {
+            opponentMoves
+                .asSequence()
+                .sortedByDescending { replyThreatBias(stateAfterAiMove, it) }
+                .take(maxOpponentThreatChecks)
+                .toList()
+        } else {
+            opponentMoves
+        }
+        return candidateReplies.any { reply ->
+            val afterReply = Rules.applyMove(stateAfterAiMove, reply)
+            afterReply.winner == Player.HUMAN || Rules.hasHarmonyRing(afterReply, Player.HUMAN)
+        }
+    }
+
+    private fun replyThreatBias(state: GameState, move: Move): Int {
+        return when (move) {
+            is Move.Plant -> {
+                // Basic plants are the most frequent way to rapidly increase crossing-harmony pressure.
+                10 + if (move.type.isBasic) 4 else 0
+            }
+            is Move.Slide -> {
+                var score = 8
+                if (move.bonus != null) score += 5
+                val target = state.flowerAt(move.target)
+                if (target != null && target.owner == Player.AI) score += 7
+                score + placementCentrality(move.target)
+            }
+        }
+    }
+
     private fun policyPriorScore(state: GameState, move: Move): Double {
         return when (move) {
             is Move.Plant -> {
-                val openingWeight = if (state.turnNumber <= 4) 4.0 else 0.0
+                val openingWeight = if (state.turnNumber <= 4) 1.0 else 0.0
                 val openingPlant = priors.openingPlantCodeLog[move.type] ?: priors.defaultPlantLog
                 val openingGate = priors.openingGateLog[move.target] ?: priors.defaultGateLog
                 val generalPlant = priors.plantCodeLog[move.type] ?: priors.defaultPlantLog
                 val generalGate = priors.gateLog[move.target] ?: priors.defaultGateLog
-                (openingWeight * openingPlant) +
-                    (openingWeight * openingGate) +
-                    (2.0 * generalPlant) +
-                    (3.0 * generalGate)
+                val openingPlantDelta = openingPlant - priors.defaultPlantLog
+                val openingGateDelta = openingGate - priors.defaultGateLog
+                val generalPlantDelta = generalPlant - priors.defaultPlantLog
+                val generalGateDelta = generalGate - priors.defaultGateLog
+                (openingWeight * openingPlantDelta) +
+                    (openingWeight * openingGateDelta) +
+                    (0.7 * generalPlantDelta) +
+                    (0.9 * generalGateDelta)
             }
             is Move.Slide -> {
                 val source = state.flowers.firstOrNull { it.id == move.tileId }?.position
@@ -92,7 +191,9 @@ class SimpleAi(
                     priors.defaultSlideDeltaLog
                 }
                 val bonusLog = priors.bonusKindLog[bonusKind(move.bonus)] ?: priors.defaultBonusLog
-                (2.5 * deltaLog) + (1.5 * bonusLog)
+                val deltaPrior = deltaLog - priors.defaultSlideDeltaLog
+                val bonusPrior = bonusLog - priors.defaultBonusLog
+                (0.5 * deltaPrior) + (0.35 * bonusPrior)
             }
         }
     }
