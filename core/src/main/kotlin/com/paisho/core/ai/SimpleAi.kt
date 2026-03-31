@@ -16,6 +16,7 @@ class SimpleAi(
 ) {
     private val priors = LearnedMovePriors.default()
     private val maxFullEvaluations = 72
+    private val maxOpponentThreatChecks = 36
 
     fun chooseMove(state: GameState): Move? {
         if (state.currentPlayer != Player.AI || state.winner != null) return null
@@ -132,9 +133,35 @@ class SimpleAi(
     private fun opponentHasImmediateWin(stateAfterAiMove: GameState): Boolean {
         if (stateAfterAiMove.phase != com.paisho.core.game.GamePhase.PLAYING) return false
         val opponentMoves = Rules.legalMoves(stateAfterAiMove)
-        return opponentMoves.any { reply ->
+        if (opponentMoves.isEmpty()) return false
+        val candidateReplies = if (opponentMoves.size > maxOpponentThreatChecks) {
+            opponentMoves
+                .asSequence()
+                .sortedByDescending { replyThreatBias(stateAfterAiMove, it) }
+                .take(maxOpponentThreatChecks)
+                .toList()
+        } else {
+            opponentMoves
+        }
+        return candidateReplies.any { reply ->
             val afterReply = Rules.applyMove(stateAfterAiMove, reply)
             afterReply.winner == Player.HUMAN || Rules.hasHarmonyRing(afterReply, Player.HUMAN)
+        }
+    }
+
+    private fun replyThreatBias(state: GameState, move: Move): Int {
+        return when (move) {
+            is Move.Plant -> {
+                // Basic plants are the most frequent way to rapidly increase crossing-harmony pressure.
+                10 + if (move.type.isBasic) 4 else 0
+            }
+            is Move.Slide -> {
+                var score = 8
+                if (move.bonus != null) score += 5
+                val target = state.flowerAt(move.target)
+                if (target != null && target.owner == Player.AI) score += 7
+                score + placementCentrality(move.target)
+            }
         }
     }
 

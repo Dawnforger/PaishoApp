@@ -135,6 +135,36 @@ class RulesTest {
     }
 
     @Test
+    fun `ai smoke test develops beyond opening tile`() {
+        val ai = SimpleAi(Random(7))
+        var state = GameState.initial().copy(
+            currentPlayer = Player.AI,
+            flowers = listOf(
+                FlowerTile(1, Player.HUMAN, TileType.ROSE, Position(-8, 0)),
+                FlowerTile(2, Player.AI, TileType.ROSE, Position(8, 0)),
+                // Orchids adjacent to each gate keep gate flowers trapped, constraining AI turns to planting.
+                FlowerTile(3, Player.HUMAN, TileType.ORCHID, Position(1, 7)),
+                FlowerTile(4, Player.HUMAN, TileType.ORCHID, Position(7, 1)),
+                FlowerTile(5, Player.HUMAN, TileType.ORCHID, Position(-1, -7)),
+                FlowerTile(6, Player.HUMAN, TileType.ORCHID, Position(-7, -1)),
+            ),
+            nextFlowerId = 7,
+        )
+
+        repeat(2) {
+            val move = ai.chooseMove(state)
+            assertNotNull(move)
+            assertTrue(move is Move.Plant, "Smoke test expects plant-only choices in constrained setup.")
+            state = Rules.applyMove(state, move).copy(currentPlayer = Player.AI)
+        }
+
+        assertTrue(
+            state.flowersFor(Player.AI).size >= 3,
+            "AI should develop beyond a single opening flower in smoke simulation."
+        )
+    }
+
+    @Test
     fun `harmony bonus options include only legal reserve-driven actions`() {
         val base = GameState.initial().copy(
             currentPlayer = Player.HUMAN,
@@ -165,4 +195,5 @@ class RulesTest {
             basic = TileType.basicTypes.associateWith { 0 }
         )
     }
+
 }
