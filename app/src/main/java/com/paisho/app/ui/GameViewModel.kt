@@ -33,6 +33,7 @@ class GameViewModel : ViewModel() {
     private var currentGameId: String? = null
     private var pendingHarmonySlideCandidates: List<Move.Slide> = emptyList()
     private var pendingHarmonyStartState: GameState? = null
+    private var pendingHarmonyPreviewState: GameState? = null
     private var stagedHarmonyUndoState: HarmonyUndoState? = null
     private val _uiState = MutableStateFlow(
         state.toUiState(
@@ -47,6 +48,8 @@ class GameViewModel : ViewModel() {
             isHarmonyBonusFlow = false,
             harmonyBonusFlowerOptions = emptySet(),
             harmonyBonusAccentOptions = emptySet(),
+            canChooseNoBonus = false,
+            projectedBoardSnapshot = null,
             setupState = NewGameSetupState(),
             existingGames = emptyList(),
             appScreen = AppScreen.Home,
@@ -84,6 +87,8 @@ class GameViewModel : ViewModel() {
             isHarmonyBonusFlow = false,
             harmonyBonusFlowerOptions = emptySet(),
             harmonyBonusAccentOptions = emptySet(),
+            canChooseNoBonus = false,
+            projectedBoardSnapshot = null,
             setupState = _uiState.value.setupState,
             existingGames = _uiState.value.existingGames,
             appScreen = AppScreen.Game,
@@ -180,6 +185,8 @@ class GameViewModel : ViewModel() {
             isHarmonyBonusFlow = false,
             harmonyBonusFlowerOptions = emptySet(),
             harmonyBonusAccentOptions = emptySet(),
+            canChooseNoBonus = false,
+            projectedBoardSnapshot = null,
             setupState = setup,
             existingGames = updatedExistingGames,
             appScreen = AppScreen.Game,
@@ -299,6 +306,19 @@ class GameViewModel : ViewModel() {
         appendLog("Accent ${accentCode(accentType)} selected. Form a new Harmony and choose a bonus action.")
     }
 
+    fun chooseHarmonyNoBonus() {
+        if (!isHarmonyBonusPending()) return
+        val preview = pendingHarmonyPreviewState ?: return
+        val start = pendingHarmonyStartState ?: return
+        if (!hasPendingTurnChanges) turnStartState = start
+        state = preview
+        stagedActions = stagedActions + "No bonus chosen"
+        appendLog("Harmony bonus skipped.")
+        clearHarmonyBonusState()
+        hasPendingTurnChanges = true
+        publishState(clearSelection = true)
+    }
+
     fun submitTurn() {
         if (!hasPendingTurnChanges) return
         if (state.phase != GamePhase.FINISHED && state.winner == null && !state.isDraw && state.currentPlayer == Player.AI) {
@@ -378,6 +398,7 @@ class GameViewModel : ViewModel() {
         }
         pendingHarmonySlideCandidates = bonusCandidates
         pendingHarmonyStartState = state
+        pendingHarmonyPreviewState = Rules.applyMove(state, candidates.first())
         clearStagedHarmonyUndoState()
         appendLog("Harmony formed. Select a reserve tile to choose your bonus.")
         publishState(clearSelection = true)
@@ -431,33 +452,6 @@ class GameViewModel : ViewModel() {
         publishState(clearSelection = true)
     }
 
-    fun resetGame() {
-        state = GameState.initial(defaultRulesConfig())
-        turnStartState = state
-        hasPendingTurnChanges = false
-        stagedActions = emptyList()
-        clearHarmonyBonusState()
-        clearStagedHarmonyUndoState()
-        syncPersistedGames(_uiState.value.existingGames)
-        _uiState.value = state.toUiState(
-            log = listOf("Game reset."),
-            selectedTileType = null,
-            selectedAccentType = null,
-            isAwaitingSubmit = false,
-            selectedSource = null,
-            selectedTarget = null,
-            legalTargets = emptySet(),
-            stagedActions = emptyList(),
-            isHarmonyBonusFlow = false,
-            harmonyBonusFlowerOptions = emptySet(),
-            harmonyBonusAccentOptions = emptySet(),
-            setupState = _uiState.value.setupState,
-            existingGames = _uiState.value.existingGames,
-            appScreen = AppScreen.Game,
-            drawerSection = DrawerSection.Game,
-        )
-    }
-
     private fun publishState(clearSelection: Boolean) {
         val priorLog = _uiState.value.eventLog
         val source = if (clearSelection) null else _uiState.value.selectedSource
@@ -479,6 +473,8 @@ class GameViewModel : ViewModel() {
             isHarmonyBonusFlow = isHarmonyBonusPending(),
             harmonyBonusFlowerOptions = harmonyBonusFlowerOptions(),
             harmonyBonusAccentOptions = harmonyBonusAccentOptions(),
+            canChooseNoBonus = isHarmonyBonusPending(),
+            projectedBoardSnapshot = pendingHarmonyPreviewState?.boardSnapshot(),
             setupState = _uiState.value.setupState,
             existingGames = currentExisting,
             appScreen = _uiState.value.appScreen,
@@ -502,6 +498,8 @@ class GameViewModel : ViewModel() {
         isHarmonyBonusFlow: Boolean,
         harmonyBonusFlowerOptions: Set<TileType>,
         harmonyBonusAccentOptions: Set<AccentType>,
+        canChooseNoBonus: Boolean,
+        projectedBoardSnapshot: Map<Position, String>?,
         setupState: NewGameSetupState,
         existingGames: List<ExistingGameSummary>,
         appScreen: AppScreen,
@@ -529,6 +527,8 @@ class GameViewModel : ViewModel() {
         isHarmonyBonusFlow = isHarmonyBonusFlow,
         harmonyBonusFlowerOptions = harmonyBonusFlowerOptions,
         harmonyBonusAccentOptions = harmonyBonusAccentOptions,
+        canChooseNoBonus = canChooseNoBonus,
+        projectedBoardSnapshot = projectedBoardSnapshot,
         legalPositions = rules.legalPositions,
         zoneByPosition = rules.zoneByPosition,
         boardVisualConfig = defaultBoardVisualConfig(),
@@ -666,6 +666,7 @@ class GameViewModel : ViewModel() {
     private fun clearHarmonyBonusState() {
         pendingHarmonySlideCandidates = emptyList()
         pendingHarmonyStartState = null
+        pendingHarmonyPreviewState = null
     }
 
     private fun clearStagedHarmonyUndoState() {

@@ -74,6 +74,8 @@ data class GameUiState(
     val accentReserveCounts: Map<AccentType, Int> = emptyMap(),
     val stagedActions: List<String> = emptyList(),
     val isHarmonyBonusFlow: Boolean = false,
+    val canChooseNoBonus: Boolean = false,
+    val projectedBoardSnapshot: Map<Position, String> = emptyMap(),
     val harmonyBonusFlowerOptions: Set<TileType> = emptySet(),
     val harmonyBonusAccentOptions: Set<AccentType> = emptySet(),
     val boardSnapshot: Map<Position, String> = emptyMap(),
