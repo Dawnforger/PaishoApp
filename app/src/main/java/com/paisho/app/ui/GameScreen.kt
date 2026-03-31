@@ -180,6 +180,7 @@ private fun HomeScreen(onNewGame: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NewGameSetupScreen(
     setup: NewGameSetupState,
@@ -195,9 +196,13 @@ private fun NewGameSetupScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        @OptIn(ExperimentalLayoutApi::class)
         Text("New Game Setup", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("1) Choose opening Basic Flower tile", style = MaterialTheme.typography.titleMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             listOf(
                 TileType.ROSE, TileType.CHRYSANTHEMUM, TileType.RHODODENDRON,
                 TileType.JASMINE, TileType.LILY, TileType.WHITE_JADE
@@ -209,7 +214,10 @@ private fun NewGameSetupScreen(
         }
         HorizontalDivider()
         Text("2) Choose exactly 4 Accent tiles (max 2 of each)", style = MaterialTheme.typography.titleMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             accentChoices.forEach { accent ->
                 val count = setup.selectedAccents.count { it == accent }
                 TextButton(onClick = { onAccentToggled(accent) }) {
