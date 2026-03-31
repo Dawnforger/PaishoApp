@@ -1,5 +1,15 @@
 # Release Notes
 
+## v0.0.13
+
+- Added replay-driven AI training pipeline to ingest and decode Skud replay links from CSV input.
+- Generated learned policy priors from 5k+ parsed games and integrated priors into `SimpleAi` move scoring.
+- Added AI move shortlist guardrail for large branching positions to reduce timeout risk.
+- Added replay study artifacts:
+  - `analysis/ai_priors.json` (machine-readable priors)
+  - `analysis/ai_training_report.md` (data findings summary)
+- Updated app version metadata and in-app labels for v0.0.13.
+
 ## v0.0.12
 
 - Fixed Wheel accent rotation direction so surrounding tiles rotate clockwise as intended.

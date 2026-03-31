@@ -115,6 +115,26 @@ class RulesTest {
     }
 
     @Test
+    fun `ai learned priors favor common opening plant and gate`() {
+        val state = GameState.initial().copy(
+            currentPlayer = Player.AI,
+            flowers = listOf(
+                FlowerTile(1, Player.HUMAN, TileType.ROSE, Position(-8, 0)),
+                FlowerTile(2, Player.AI, TileType.ROSE, Position(8, 0)),
+                // Trap the AI rose so slide options disappear and only plant moves remain.
+                FlowerTile(3, Player.HUMAN, TileType.ORCHID, Position(7, 1)),
+            ),
+            nextFlowerId = 4,
+        )
+
+        val legalSlides = Rules.legalMoves(state).filterIsInstance<Move.Slide>()
+        assertTrue(legalSlides.isEmpty())
+
+        val move = SimpleAi(Random(0)).chooseMove(state)
+        assertEquals(Move.Plant(TileType.WHITE_JADE, Position(0, -8)), move)
+    }
+
+    @Test
     fun `harmony bonus options include only legal reserve-driven actions`() {
         val base = GameState.initial().copy(
             currentPlayer = Player.HUMAN,
