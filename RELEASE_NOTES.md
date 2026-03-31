@@ -1,5 +1,15 @@
 # Release Notes
 
+## v0.0.15
+
+- Fixed AI ANR/freeze risk observed in dense board states by reducing per-turn compute cost.
+- Refactored AI evaluation to a two-stage approach:
+  - broad cheap scoring across legal moves
+  - deeper scoring only on a bounded top candidate subset
+- Replaced expensive nested opponent threat scans with capped immediate-win counting.
+- Preserved aggressive win-focused behavior while improving responsiveness and stability.
+- Updated app version metadata and in-app labels for v0.0.15.
+
 ## v0.0.14
 
 - Tuned AI strategy to play more aggressively toward win conditions (harmony pressure, development, and tactical captures).

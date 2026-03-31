@@ -15,33 +15,35 @@ class SimpleAi(
     private val random: Random = Random.Default,
 ) {
     private val priors = LearnedMovePriors.default()
-    private val maxFullEvaluations = 72
-    private val maxOpponentThreatChecks = 36
+    private val maxImmediateWinChecks = 48
+    private val maxDeepEvaluations = 18
+    private val maxOpponentThreatChecks = 10
 
     fun chooseMove(state: GameState): Move? {
         if (state.currentPlayer != Player.AI || state.winner != null) return null
         val legalMoves = Rules.legalMoves(state)
         if (legalMoves.isEmpty()) return null
+        if (legalMoves.size == 1) return legalMoves.first()
 
-        val immediateWins = legalMoves.filter { move ->
+        // Stage 1 (fast): cheaply rank all legal moves.
+        val rankedQuick = legalMoves
+            .map { move -> move to quickScore(state, move) }
+            .sortedByDescending { it.second }
+
+        // Check only top tactical candidates for immediate wins to avoid expensive full scans in huge trees.
+        val immediateWinPool = if (rankedQuick.size > maxImmediateWinChecks) {
+            rankedQuick.take(maxImmediateWinChecks).map { it.first }
+        } else {
+            rankedQuick.map { it.first }
+        }
+        val immediateWins = immediateWinPool.filter { move ->
             val after = Rules.applyMove(state, move)
             after.winner == Player.AI || Rules.hasHarmonyRing(after, Player.AI)
         }
-        if (immediateWins.isNotEmpty()) {
-            return immediateWins.random(random)
-        }
+        if (immediateWins.isNotEmpty()) return immediateWins.random(random)
 
-        // Keep search bounded in large branching states to avoid turn-time stalls.
-        val candidates = if (legalMoves.size > maxFullEvaluations) {
-            legalMoves
-                .map { move -> move to quickScore(state, move) }
-                .sortedByDescending { it.second }
-                .take(maxFullEvaluations)
-                .map { it.first }
-        } else {
-            legalMoves
-        }
-
+        // Stage 2 (bounded): deep-evaluate only a small top slice.
+        val candidates = rankedQuick.take(maxDeepEvaluations).map { it.first }
         val scored = candidates.map { move -> move to scoreMove(state, move) }
         val topScore = scored.maxOf { (_, score) -> score }
         val topMoves = scored.filter { (_, score) -> score == topScore }.map { (move, _) -> move }
@@ -63,7 +65,10 @@ class SimpleAi(
 
         val next = Rules.applyMove(state, move)
         score += strategicStateScore(next)
-        if (opponentHasImmediateWin(next)) score -= 250_000.0
+        val immediateThreats = opponentImmediateWinCount(next)
+        if (immediateThreats > 0) {
+            score -= 70_000.0 + (immediateThreats * 20_000.0)
+        }
         if (next.winner == Player.AI) score += 1_000_000.0
         if (next.winner == Player.HUMAN) score -= 1_000_000.0
         return score
@@ -86,9 +91,8 @@ class SimpleAi(
         val humanHarmony = harmonies.count { it.owner == Player.HUMAN }
         val aiMidline = Rules.computeMidlineCrossingHarmonyCount(state, Player.AI)
         val humanMidline = Rules.computeMidlineCrossingHarmonyCount(state, Player.HUMAN)
-
-        val aiMobility = Rules.legalMoves(state.copy(currentPlayer = Player.AI)).size
-        val humanMobility = Rules.legalMoves(state.copy(currentPlayer = Player.HUMAN)).size
+        val aiBasicRemaining = state.reserveFor(Player.AI).totalBasicCount()
+        val humanBasicRemaining = state.reserveFor(Player.HUMAN).totalBasicCount()
 
         var score = 0.0
         score += (aiFlowers.size - humanFlowers.size) * 120.0
@@ -96,7 +100,7 @@ class SimpleAi(
         score += aiHarmony * 320.0
         score -= humanHarmony * 360.0
         score += (aiMidline - humanMidline) * 120.0
-        score += (aiMobility - humanMobility) * 2.0
+        score += (humanBasicRemaining - aiBasicRemaining) * 4.0
         score -= aiOnGate * 35.0
         score += humanOnGate * 25.0
         if (Rules.hasHarmonyRing(state, Player.AI)) score += 300_000.0
@@ -130,10 +134,10 @@ class SimpleAi(
         }
     }
 
-    private fun opponentHasImmediateWin(stateAfterAiMove: GameState): Boolean {
-        if (stateAfterAiMove.phase != com.paisho.core.game.GamePhase.PLAYING) return false
+    private fun opponentImmediateWinCount(stateAfterAiMove: GameState): Int {
+        if (stateAfterAiMove.phase != com.paisho.core.game.GamePhase.PLAYING) return 0
         val opponentMoves = Rules.legalMoves(stateAfterAiMove)
-        if (opponentMoves.isEmpty()) return false
+        if (opponentMoves.isEmpty()) return 0
         val candidateReplies = if (opponentMoves.size > maxOpponentThreatChecks) {
             opponentMoves
                 .asSequence()
@@ -143,7 +147,7 @@ class SimpleAi(
         } else {
             opponentMoves
         }
-        return candidateReplies.any { reply ->
+        return candidateReplies.count { reply ->
             val afterReply = Rules.applyMove(stateAfterAiMove, reply)
             afterReply.winner == Player.HUMAN || Rules.hasHarmonyRing(afterReply, Player.HUMAN)
         }
