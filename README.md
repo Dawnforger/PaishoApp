@@ -7,10 +7,10 @@ Native Android app for playing Skud Pai Sho with:
 
 ## Release
 
-- Current release: **v0.0.13**
-- Versioning policy: increment patch as **0.0.0x** per release (`v0.0.01`, `v0.0.02`, `v0.0.03`, `v0.0.04`, `v0.0.05`, `v0.0.06`, `v0.0.07`, `v0.0.08`, `v0.0.09`, `v0.0.10`, `v0.0.11`, `v0.0.12`, `v0.0.13`, ...)
+- Current release: **v0.0.14**
+- Versioning policy: increment patch as **0.0.0x** per release (`v0.0.01`, `v0.0.02`, `v0.0.03`, `v0.0.04`, `v0.0.05`, `v0.0.06`, `v0.0.07`, `v0.0.08`, `v0.0.09`, `v0.0.10`, `v0.0.11`, `v0.0.12`, `v0.0.13`, `v0.0.14`, ...)
 
-## Current implementation (v0.0.13)
+## Current implementation (v0.0.14)
 
 This repository includes a native Android project written in Kotlin + Jetpack Compose with:
 
@@ -31,6 +31,8 @@ This repository includes a native Android project written in Kotlin + Jetpack Co
 - Traditional opening gate orientation (host bottom, guest top) and quicker turn controls layout
 - Replay-trained AI priors integrated into move scoring, using thousands of parsed historical games
 - AI move-selection path now shortlists candidates in high-branch states to reduce timeout/hang risk
+- Aggressive win-focused AI tuning now prioritizes immediate wins, tactical pressure, and anti-stall development
+- Added deterministic anti-stall smoke test to ensure AI expands board presence when planting is available
 - Unit tests for core rule transitions and legality scenarios
 
 ## Architecture

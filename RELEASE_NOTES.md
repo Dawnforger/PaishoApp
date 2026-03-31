@@ -1,5 +1,14 @@
 # Release Notes
 
+## v0.0.14
+
+- Tuned AI strategy to play more aggressively toward win conditions (harmony pressure, development, and tactical captures).
+- Added bounded opponent immediate-threat checks in AI evaluation to preserve responsiveness in large branching positions.
+- Added deterministic anti-stall smoke coverage to ensure AI expands board presence when planting opportunities exist.
+- Added plain-English replay findings companion report:
+  - `analysis/ai_findings_plain_english.md`
+- Updated app version metadata and in-app labels for v0.0.14.
+
 ## v0.0.13
 
 - Added replay-driven AI training pipeline to ingest and decode Skud replay links from CSV input.
