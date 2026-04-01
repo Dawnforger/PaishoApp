@@ -1,5 +1,13 @@
 # Release Notes
 
+## v0.0.16
+
+- Fixed New Game Setup opening-tile visibility on narrow screens by wrapping selection chips so all starting tile options remain accessible.
+- Added explicit Harmony "No Bonus" option (visible only during Harmony bonus flow) to allow skipping bonus actions.
+- Removed the in-turn Reset button to prevent accidental full game resets.
+- During Harmony bonus flow, board rendering now shows projected post-arrange state to improve accent/bonus targeting decisions.
+- Updated app version metadata and in-app labels for v0.0.16.
+
 ## v0.0.15
 
 - Fixed AI ANR/freeze risk observed in dense board states by reducing per-turn compute cost.
