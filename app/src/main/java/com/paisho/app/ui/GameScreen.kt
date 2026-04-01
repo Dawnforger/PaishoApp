@@ -126,7 +126,7 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Skud Pai Sho v0.0.15") },
+                    title = { Text("Skud Pai Sho v0.0.16") },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "Open menu")
@@ -180,6 +180,7 @@ private fun HomeScreen(onNewGame: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NewGameSetupScreen(
     setup: NewGameSetupState,
@@ -195,9 +196,13 @@ private fun NewGameSetupScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        @OptIn(ExperimentalLayoutApi::class)
         Text("New Game Setup", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("1) Choose opening Basic Flower tile", style = MaterialTheme.typography.titleMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             listOf(
                 TileType.ROSE, TileType.CHRYSANTHEMUM, TileType.RHODODENDRON,
                 TileType.JASMINE, TileType.LILY, TileType.WHITE_JADE
@@ -209,7 +214,10 @@ private fun NewGameSetupScreen(
         }
         HorizontalDivider()
         Text("2) Choose exactly 4 Accent tiles (max 2 of each)", style = MaterialTheme.typography.titleMedium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             accentChoices.forEach { accent ->
                 val count = setup.selectedAccents.count { it == accent }
                 TextButton(onClick = { onAccentToggled(accent) }) {
@@ -318,7 +326,8 @@ fun GameScreen(viewModel: GameViewModel) {
                     zoneByPosition = state.zoneByPosition,
                     boardVisualConfig = state.boardVisualConfig,
                     onTileClick = viewModel::onPositionSelected,
-                    cells = state.boardSnapshot
+                    cells = state.boardSnapshot,
+                    projectedCells = state.projectedBoardSnapshot,
                 )
             }
         }
@@ -372,6 +381,12 @@ fun GameScreen(viewModel: GameViewModel) {
                             "Undo returns to the start of this harmony bonus flow.",
                             style = MaterialTheme.typography.bodySmall
                         )
+                        Button(
+                            onClick = viewModel::chooseHarmonyNoBonus,
+                            enabled = state.canChooseNoBonus && !state.isGameOver
+                        ) {
+                            Text("No Bonus")
+                        }
                     }
                 }
             }
@@ -390,9 +405,6 @@ fun GameScreen(viewModel: GameViewModel) {
                     enabled = state.canSubmitTurn && !state.isGameOver
                 ) {
                     Text("Submit")
-                }
-                Button(onClick = viewModel::resetGame) {
-                    Text("Reset")
                 }
             }
         }
@@ -458,7 +470,8 @@ private fun CircularBoard(
     zoneByPosition: Map<Position, BoardZone>,
     boardVisualConfig: BoardVisualConfig,
     onTileClick: (Position) -> Unit,
-    cells: Map<Position, String>
+    cells: Map<Position, String>,
+    projectedCells: Map<Position, String>,
 ) {
     val boardSizeDp = 360.dp
     val boardRadiusFraction = 0.495f
@@ -615,11 +628,13 @@ private fun CircularBoard(
 
             for (position in allPoints) {
                 val token = cells[position].orEmpty()
+                val projectedToken = projectedCells[position].orEmpty()
                 val isSource = selectedSource == position
                 val isTarget = selectedTarget == position
                 val isLegalTarget = position in legalTargets
                 val isInteractiveHint = position in interactivePoints
-                if (token.isEmpty() && !isSource && !isTarget && !isLegalTarget && !isInteractiveHint) continue
+                val hasProjectedChange = projectedToken != token
+                if (token.isEmpty() && projectedToken.isEmpty() && !isSource && !isTarget && !isLegalTarget && !isInteractiveHint) continue
 
                 val p = Offset(
                     x = center.x + position.col * step,
@@ -636,6 +651,15 @@ private fun CircularBoard(
                     drawCircle(color = highlightColor, radius = anchorRadiusPx, center = p, style = Fill)
                 }
 
+                if (hasProjectedChange && projectedToken.isNotEmpty()) {
+                    drawCircle(
+                        color = Color(0x66FFD54F),
+                        radius = pieceRadiusPx + 4f,
+                        center = p,
+                        style = Stroke(width = 2f)
+                    )
+                }
+
                 val pieceCode = tokenCodeFromSnapshot(token)
                 if (pieceCode != null) {
                     val isAiPiece = token.startsWith("A")
@@ -646,6 +670,20 @@ private fun CircularBoard(
                     drawIntoCanvas { canvas ->
                         val baseline = p.y - (textPaint.ascent() + textPaint.descent()) / 2f
                         canvas.nativeCanvas.drawText(pieceCode, p.x, baseline, textPaint)
+                    }
+                }
+
+                if (hasProjectedChange && projectedToken.isNotEmpty()) {
+                    val previewCode = tokenCodeFromSnapshot(projectedToken)
+                    if (previewCode != null) {
+                        val previewPaint = Paint(textPaint).apply {
+                            color = android.graphics.Color.YELLOW
+                            textSize = pieceRadiusPx * 0.7f
+                        }
+                        drawIntoCanvas { canvas ->
+                            val baseline = p.y + pieceRadiusPx + (previewPaint.textSize * 0.2f)
+                            canvas.nativeCanvas.drawText(previewCode, p.x, baseline, previewPaint)
+                        }
                     }
                 }
             }
