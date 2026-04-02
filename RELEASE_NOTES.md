@@ -5,18 +5,29 @@
 - Added a new Docker-ready multiplayer backend module at `server/` for correspondence play.
 - Implemented server-authoritative move validation by reusing the existing `:core` rules engine.
 - Added SQLite-backed persistence for canonical game state and move history.
+- Added JWT auth flow and bearer-gated multiplayer endpoints:
+  - `POST /api/v1/auth/token`
+  - authenticated game create/join/list/get/legal-moves/submit
 - Added correspondence API endpoints:
   - `GET /health`
   - `POST /api/v1/games`
   - `POST /api/v1/games/{gameId}/join`
-  - `GET /api/v1/games?playerId={id}`
+  - `GET /api/v1/games`
   - `GET /api/v1/games/{gameId}`
-  - `GET /api/v1/games/{gameId}/legal-moves?playerId={id}`
+  - `GET /api/v1/games/{gameId}/legal-moves`
   - `POST /api/v1/games/{gameId}/moves`
 - Added NAS-friendly deployment artifacts:
   - `server/Dockerfile`
   - `docker-compose.server.yml`
   - `server/README.md`
+- Added backend integration tests for:
+  - authenticated create/join/legal-moves flow
+  - non-member legal-moves access rejection
+  - stale-version move submit conflict handling
+- Added Android multiplayer networking scaffolding:
+  - `MultiplayerApi` + `MultiplayerRepository`
+  - ViewModel hooks for multiplayer configure/create/refresh
+  - cleartext LAN HTTP support in manifest for NAS development
 
 ## v0.0.16
 
