@@ -1,11 +1,12 @@
 package com.paisho.app.ui
 
 import androidx.lifecycle.ViewModel
+import com.paisho.app.network.MultiplayerRepository
 import com.paisho.core.ai.SimpleAi
 import com.paisho.core.game.AccentType
-import com.paisho.core.game.GamePhase
 import com.paisho.core.game.BonusAction
 import com.paisho.core.game.GameEndReason
+import com.paisho.core.game.GamePhase
 import com.paisho.core.game.GameState
 import com.paisho.core.game.Move
 import com.paisho.core.game.Player
@@ -13,10 +14,13 @@ import com.paisho.core.game.Position
 import com.paisho.core.game.Rules
 import com.paisho.core.game.RulesConfig
 import com.paisho.core.game.TileType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 class GameViewModel : ViewModel() {
     private data class HarmonyUndoState(
@@ -25,6 +29,8 @@ class GameViewModel : ViewModel() {
     )
 
     private val ai = SimpleAi()
+    private val multiplayerRepository = MultiplayerRepository()
+    private val ioScope = CoroutineScope(Dispatchers.IO)
     private var state: GameState = GameState.initial(defaultRulesConfig())
     private var turnStartState: GameState = state
     private var hasPendingTurnChanges: Boolean = false
@@ -37,7 +43,7 @@ class GameViewModel : ViewModel() {
     private var stagedHarmonyUndoState: HarmonyUndoState? = null
     private val _uiState = MutableStateFlow(
         state.toUiState(
-            log = listOf("Skud Pai Sho v0.0.16 - full rules engine enabled."),
+            log = listOf("Skud Pai Sho v0.0.17 - full rules engine enabled."),
             selectedTileType = null,
             selectedAccentType = null,
             isAwaitingSubmit = false,
@@ -98,6 +104,84 @@ class GameViewModel : ViewModel() {
 
     fun openSettings() {
         _uiState.update { it.copy(appScreen = AppScreen.Settings, drawerSection = DrawerSection.Settings) }
+    }
+
+    fun configureMultiplayer(baseUrl: String, playerId: String, playerName: String) {
+        if (baseUrl.isBlank() || playerId.isBlank()) {
+            appendLog("Multiplayer config requires base URL and player ID.")
+            return
+        }
+        multiplayerRepository.configure(baseUrl = baseUrl, playerId = playerId)
+        _uiState.update {
+            it.copy(
+                multiplayerSession = it.multiplayerSession.copy(
+                    configured = true,
+                    baseUrl = baseUrl,
+                    playerId = playerId,
+                    playerName = playerName.ifBlank { null },
+                    lastError = null,
+                ),
+            )
+        }
+        appendLog("Multiplayer configured for player $playerId.")
+    }
+
+    fun createOnlineGame() {
+        val session = _uiState.value.multiplayerSession
+        if (!session.configured) {
+            appendLog("Configure multiplayer before creating an online game.")
+            return
+        }
+        val accents = _uiState.value.setupState.selectedAccents.takeIf { it.size == 4 }
+            ?: listOf(AccentType.ROCK, AccentType.WHEEL, AccentType.KNOTWEED, AccentType.BOAT)
+        ioScope.launch {
+            val result = multiplayerRepository.createGame(
+                openingBasicType = _uiState.value.setupState.openingBasicType,
+                hostAccentLoadout = accents,
+                guestAccentLoadout = accents,
+            )
+            result.onSuccess { created ->
+                _uiState.update {
+                    it.copy(
+                        multiplayerSession = it.multiplayerSession.copy(
+                            gameId = created.summary.gameId,
+                            serverVersion = created.summary.version,
+                            lastError = null,
+                        ),
+                    )
+                }
+                appendLog("Created online game ${created.summary.gameId.take(8)}.")
+            }.onFailure { error ->
+                _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(lastError = error.message)) }
+                appendLog("Create online game failed: ${error.message}")
+            }
+        }
+    }
+
+    fun refreshOnlineGame() {
+        val gameId = _uiState.value.multiplayerSession.gameId
+        if (gameId.isNullOrBlank()) {
+            appendLog("No online game selected to refresh.")
+            return
+        }
+        ioScope.launch {
+            val result = multiplayerRepository.getGame(gameId)
+            result.onSuccess { details ->
+                _uiState.update {
+                    it.copy(
+                        multiplayerSession = it.multiplayerSession.copy(
+                            gameId = details.summary.gameId,
+                            serverVersion = details.summary.version,
+                            lastError = null,
+                        ),
+                    )
+                }
+                appendLog("Refreshed online game ${details.summary.gameId.take(8)}.")
+            }.onFailure { error ->
+                _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(lastError = error.message)) }
+                appendLog("Refresh online game failed: ${error.message}")
+            }
+        }
     }
 
     fun startNewGameFlow() {

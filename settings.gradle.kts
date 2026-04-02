@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "PaishoApp"
 include(":app")
 include(":core")
+include(":server")

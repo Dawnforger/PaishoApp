@@ -29,6 +29,17 @@ data class ExistingGameSummary(
     val subtitle: String,
 )
 
+data class MultiplayerSession(
+    val configured: Boolean = false,
+    val baseUrl: String? = null,
+    val token: String? = null,
+    val playerId: String? = null,
+    val playerName: String? = null,
+    val gameId: String? = null,
+    val serverVersion: Int? = null,
+    val lastError: String? = null,
+)
+
 data class PersistedGame(
     val id: String,
     val title: String,
@@ -86,6 +97,7 @@ data class GameUiState(
     val endReason: GameEndReason? = null,
     val phase: GamePhase = GamePhase.PLAYING,
     val setupState: NewGameSetupState = NewGameSetupState(),
+    val multiplayerSession: MultiplayerSession = MultiplayerSession(),
     val existingGames: List<ExistingGameSummary> = emptyList(),
     val appScreen: AppScreen = AppScreen.Home,
     val drawerSection: DrawerSection = DrawerSection.Game,
