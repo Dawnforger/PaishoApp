@@ -1,5 +1,23 @@
 # Release Notes
 
+## v0.0.17
+
+- Added a new Docker-ready multiplayer backend module at `server/` for correspondence play.
+- Implemented server-authoritative move validation by reusing the existing `:core` rules engine.
+- Added SQLite-backed persistence for canonical game state and move history.
+- Added correspondence API endpoints:
+  - `GET /health`
+  - `POST /api/v1/games`
+  - `POST /api/v1/games/{gameId}/join`
+  - `GET /api/v1/games?playerId={id}`
+  - `GET /api/v1/games/{gameId}`
+  - `GET /api/v1/games/{gameId}/legal-moves?playerId={id}`
+  - `POST /api/v1/games/{gameId}/moves`
+- Added NAS-friendly deployment artifacts:
+  - `server/Dockerfile`
+  - `docker-compose.server.yml`
+  - `server/README.md`
+
 ## v0.0.16
 
 - Fixed New Game Setup opening-tile visibility on narrow screens by wrapping selection chips so all starting tile options remain accessible.

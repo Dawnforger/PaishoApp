@@ -42,6 +42,8 @@ This repository includes a native Android project written in Kotlin + Jetpack Co
   AI move selection based on legal move scoring.
 - `app/src/main/java/com/paisho/app/ui`  
   Jetpack Compose board UI and interaction flow.
+- `server/src/main/kotlin/com/paisho/server`
+  Docker-ready multiplayer backend (Ktor + SQLite) for correspondence play with persistent game state.
 
 ## Build
 
