@@ -8,7 +8,9 @@ import java.util.UUID
 data class StoredGame(
     val gameId: String,
     val hostPlayerId: String,
+    val hostDisplayName: String?,
     val guestPlayerId: String?,
+    val guestDisplayName: String?,
     val stateJson: String,
     val version: Int,
     val createdAt: Instant,
@@ -39,7 +41,9 @@ class Database(dbPath: String) {
                 CREATE TABLE IF NOT EXISTS games (
                     game_id TEXT PRIMARY KEY,
                     host_player_id TEXT NOT NULL,
+                    host_display_name TEXT,
                     guest_player_id TEXT,
+                    guest_display_name TEXT,
                     state_json TEXT NOT NULL,
                     version INTEGER NOT NULL,
                     created_at TEXT NOT NULL,
@@ -47,6 +51,9 @@ class Database(dbPath: String) {
                 )
                 """.trimIndent()
             )
+            // Best-effort additive migration for pre-existing local DBs.
+            runCatching { stmt.execute("ALTER TABLE games ADD COLUMN host_display_name TEXT") }
+            runCatching { stmt.execute("ALTER TABLE games ADD COLUMN guest_display_name TEXT") }
             stmt.execute(
                 """
                 CREATE TABLE IF NOT EXISTS move_events (
@@ -66,27 +73,34 @@ class Database(dbPath: String) {
 
     fun createGame(
         hostPlayerId: String,
+        hostDisplayName: String?,
         initialStateJson: String,
     ): StoredGame {
         val gameId = UUID.randomUUID().toString()
         val now = Instant.now()
         connection.prepareStatement(
             """
-            INSERT INTO games (game_id, host_player_id, guest_player_id, state_json, version, created_at, updated_at)
-            VALUES (?, ?, NULL, ?, 1, ?, ?)
+            INSERT INTO games (
+                game_id, host_player_id, host_display_name, guest_player_id, guest_display_name,
+                state_json, version, created_at, updated_at
+            )
+            VALUES (?, ?, ?, NULL, NULL, ?, 1, ?, ?)
             """.trimIndent()
         ).use { ps ->
             ps.setString(1, gameId)
             ps.setString(2, hostPlayerId)
-            ps.setString(3, initialStateJson)
-            ps.setString(4, now.toString())
+            ps.setString(3, hostDisplayName)
+            ps.setString(4, initialStateJson)
             ps.setString(5, now.toString())
+            ps.setString(6, now.toString())
             ps.executeUpdate()
         }
         return StoredGame(
             gameId = gameId,
             hostPlayerId = hostPlayerId,
+            hostDisplayName = hostDisplayName,
             guestPlayerId = null,
+            guestDisplayName = null,
             stateJson = initialStateJson,
             version = 1,
             createdAt = now,
@@ -94,7 +108,7 @@ class Database(dbPath: String) {
         )
     }
 
-    fun joinGame(gameId: String, guestPlayerId: String): StoredGame? {
+    fun joinGame(gameId: String, guestPlayerId: String, guestDisplayName: String?): StoredGame? {
         val current = getGame(gameId) ?: return null
         if (current.guestPlayerId != null && current.guestPlayerId != guestPlayerId) return null
         if (current.hostPlayerId == guestPlayerId) return null
@@ -103,13 +117,14 @@ class Database(dbPath: String) {
         connection.prepareStatement(
             """
             UPDATE games
-            SET guest_player_id = ?, updated_at = ?
+            SET guest_player_id = ?, guest_display_name = ?, updated_at = ?
             WHERE game_id = ? AND guest_player_id IS NULL
             """.trimIndent()
         ).use { ps ->
             ps.setString(1, guestPlayerId)
-            ps.setString(2, now.toString())
-            ps.setString(3, gameId)
+            ps.setString(2, guestDisplayName)
+            ps.setString(3, now.toString())
+            ps.setString(4, gameId)
             ps.executeUpdate()
         }
         return getGame(gameId)
@@ -118,7 +133,9 @@ class Database(dbPath: String) {
     fun getGame(gameId: String): StoredGame? {
         connection.prepareStatement(
             """
-            SELECT game_id, host_player_id, guest_player_id, state_json, version, created_at, updated_at
+            SELECT
+                game_id, host_player_id, host_display_name, guest_player_id, guest_display_name,
+                state_json, version, created_at, updated_at
             FROM games
             WHERE game_id = ?
             """.trimIndent()
@@ -134,7 +151,9 @@ class Database(dbPath: String) {
     fun listGamesForPlayer(playerId: String, limit: Int = 50): List<StoredGame> {
         connection.prepareStatement(
             """
-            SELECT game_id, host_player_id, guest_player_id, state_json, version, created_at, updated_at
+            SELECT
+                game_id, host_player_id, host_display_name, guest_player_id, guest_display_name,
+                state_json, version, created_at, updated_at
             FROM games
             WHERE host_player_id = ? OR guest_player_id = ?
             ORDER BY updated_at DESC
@@ -239,7 +258,9 @@ class Database(dbPath: String) {
         return StoredGame(
             gameId = getString("game_id"),
             hostPlayerId = getString("host_player_id"),
+            hostDisplayName = getString("host_display_name"),
             guestPlayerId = getString("guest_player_id"),
+            guestDisplayName = getString("guest_display_name"),
             stateJson = getString("state_json"),
             version = getInt("version"),
             createdAt = Instant.parse(getString("created_at")),

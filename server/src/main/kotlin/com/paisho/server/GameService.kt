@@ -8,11 +8,21 @@ import com.paisho.core.game.RulesConfig
 
 class GameService(
     private val db: Database,
+    private val tokenService: TokenService,
 ) {
-    fun createGame(request: CreateGameRequest): GameDetailsDto {
-        val hostPlayerId = request.hostPlayerId.trim()
-        require(hostPlayerId.isNotEmpty()) { "hostPlayerId cannot be blank" }
+    fun issueToken(request: LoginRequest): LoginResponse {
+        val playerId = request.playerId.trim()
+        require(playerId.isNotEmpty()) { "playerId cannot be blank" }
+        val expiresAt = System.currentTimeMillis() + (7L * 24 * 60 * 60 * 1000)
+        val token = tokenService.issueToken(playerId = playerId)
+        return LoginResponse(
+            playerId = playerId,
+            token = token,
+            expiresAtEpochMs = expiresAt,
+        )
+    }
 
+    fun createGame(request: CreateGameRequest, principal: AuthenticatedPlayer): GameDetailsDto {
         val rules = RulesConfig(
             openingBasicType = request.openingBasicType,
             humanAccentLoadout = request.hostAccentLoadout,
@@ -20,16 +30,19 @@ class GameService(
         )
         val initialState = GameState.initial(rules)
         val created = db.createGame(
-            hostPlayerId = hostPlayerId,
+            hostPlayerId = principal.playerId,
+            hostDisplayName = request.hostDisplayName?.trim().takeUnless { it.isNullOrBlank() },
             initialStateJson = JsonCodec.toJson(initialState.toSerializable()),
         )
         return toDetails(created)
     }
 
-    fun joinGame(gameId: String, request: JoinGameRequest): GameDetailsDto {
-        val guestPlayerId = request.guestPlayerId.trim()
-        require(guestPlayerId.isNotEmpty()) { "guestPlayerId cannot be blank" }
-        val joined = db.joinGame(gameId, guestPlayerId)
+    fun joinGame(gameId: String, request: JoinGameRequest, principal: AuthenticatedPlayer): GameDetailsDto {
+        val joined = db.joinGame(
+            gameId = gameId,
+            guestPlayerId = principal.playerId,
+            guestDisplayName = request.guestDisplayName?.trim().takeUnless { it.isNullOrBlank() },
+        )
             ?: throw IllegalArgumentException("Game not found or already has a different guest")
         return toDetails(joined)
     }
@@ -40,8 +53,10 @@ class GameService(
         return GamesListResponse(games = db.listGamesForPlayer(normalized).map(::toSummary))
     }
 
-    fun getGameOrNull(gameId: String): GameDetailsDto? {
-        return db.getGame(gameId)?.let(::toDetails)
+    fun getGameForPlayerOrNull(gameId: String, playerId: String): GameDetailsDto? {
+        val game = db.getGame(gameId) ?: return null
+        if (actorFor(game, playerId) == null) return null
+        return toDetails(game)
     }
 
     fun getLegalMoves(gameId: String, playerId: String): LegalMovesResponse {
@@ -56,14 +71,13 @@ class GameService(
         }
         return LegalMovesResponse(
             gameId = game.gameId,
-            playerId = playerId,
             legalMoves = legalMoves,
         )
     }
 
-    fun submitMove(gameId: String, request: SubmitMoveRequest): SubmitMoveResponse {
+    fun submitMove(gameId: String, request: SubmitMoveRequest, principalPlayerId: String): SubmitMoveResponse {
         val game = db.getGame(gameId) ?: throw IllegalArgumentException("Game not found")
-        val actor = actorFor(game, request.playerId)
+        val actor = actorFor(game, principalPlayerId)
             ?: throw IllegalArgumentException("playerId is not part of this game")
         if (game.version != request.expectedVersion) {
             throw IllegalStateException("Version mismatch")
@@ -83,7 +97,7 @@ class GameService(
         val nextState = Rules.applyMove(state, move)
         val updated = db.appendMoveAndUpdateState(
             gameId = game.gameId,
-            actorPlayerId = request.playerId,
+            actorPlayerId = principalPlayerId,
             expectedVersion = request.expectedVersion,
             movePayloadJson = JsonCodec.toJson(request.move),
             nextStateJson = JsonCodec.toJson(nextState.toSerializable()),
@@ -128,13 +142,14 @@ class GameService(
             Player.HUMAN -> game.hostPlayerId
             Player.AI -> game.guestPlayerId
         }
-        val title = "Game ${game.gameId.take(8)}"
         return GameSummaryDto(
             gameId = game.gameId,
-            title = title,
+            title = "Game ${game.gameId.take(8)}",
             status = status,
             hostPlayerId = game.hostPlayerId,
+            hostDisplayName = null,
             guestPlayerId = game.guestPlayerId,
+            guestDisplayName = null,
             currentTurnPlayerId = currentTurnPlayerId,
             winnerPlayerId = winnerPlayerId,
             turnNumber = state.turnNumber,

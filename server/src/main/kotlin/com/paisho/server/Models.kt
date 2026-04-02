@@ -36,7 +36,6 @@ enum class GameStatus {
 
 @Serializable
 data class CreateGameRequest(
-    val hostPlayerId: String,
     val hostDisplayName: String? = null,
     val title: String? = null,
     val openingBasicType: TileType = TileType.ROSE,
@@ -56,15 +55,25 @@ data class CreateGameRequest(
 
 @Serializable
 data class JoinGameRequest(
-    val guestPlayerId: String,
     val guestDisplayName: String? = null,
 )
 
 @Serializable
 data class SubmitMoveRequest(
-    val playerId: String,
     val expectedVersion: Int,
     val move: MoveDto,
+)
+
+@Serializable
+data class LoginRequest(
+    val playerId: String,
+)
+
+@Serializable
+data class LoginResponse(
+    val playerId: String,
+    val token: String,
+    val expiresAtEpochMs: Long,
 )
 
 @Serializable
@@ -75,7 +84,6 @@ data class GamesListResponse(
 @Serializable
 data class LegalMovesResponse(
     val gameId: String,
-    val playerId: String,
     val legalMoves: List<MoveDto>,
 )
 

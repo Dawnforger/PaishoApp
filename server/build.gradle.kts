@@ -16,6 +16,8 @@ application {
 dependencies {
     implementation(project(":core"))
 
+    implementation("io.ktor:ktor-server-auth:2.3.12")
+    implementation("io.ktor:ktor-server-auth-jwt:2.3.12")
     implementation("io.ktor:ktor-server-core:2.3.12")
     implementation("io.ktor:ktor-server-netty:2.3.12")
     implementation("io.ktor:ktor-server-content-negotiation:2.3.12")
@@ -34,6 +36,8 @@ dependencies {
 
     testImplementation(kotlin("test"))
     testImplementation("io.ktor:ktor-server-test-host:2.3.12")
+    testImplementation("io.ktor:ktor-client-content-negotiation:2.3.12")
+    testImplementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
 }
 
 tasks.test {

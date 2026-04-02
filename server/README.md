@@ -8,15 +8,30 @@ Docker-ready authoritative backend for asynchronous multiplayer:
 
 ## API endpoints
 
-- `GET /health`
+Authentication:
+
+- `POST /api/v1/auth/issue-token` (public)
+- all game endpoints require `Authorization: Bearer <token>`
+
+- `GET /health` (public)
 - `POST /api/v1/games`
 - `POST /api/v1/games/{gameId}/join`
-- `GET /api/v1/games?playerId={id}`
+- `GET /api/v1/games`
 - `GET /api/v1/games/{gameId}`
-- `GET /api/v1/games/{gameId}/legal-moves?playerId={id}`
+- `GET /api/v1/games/{gameId}/legal-moves`
 - `POST /api/v1/games/{gameId}/moves`
 
 ## Request/response examples
+
+### Issue token
+
+`POST /api/v1/auth/issue-token`
+
+```json
+{
+  "playerId": "alice"
+}
+```
 
 ### Create game
 
@@ -24,7 +39,6 @@ Docker-ready authoritative backend for asynchronous multiplayer:
 
 ```json
 {
-  "hostPlayerId": "alice",
   "openingBasicType": "ROSE",
   "hostAccentLoadout": ["ROCK", "WHEEL", "KNOTWEED", "BOAT"],
   "guestAccentLoadout": ["ROCK", "WHEEL", "KNOTWEED", "BOAT"]
@@ -37,11 +51,10 @@ Docker-ready authoritative backend for asynchronous multiplayer:
 
 ```json
 {
-  "playerId": "alice",
   "expectedVersion": 2,
   "move": {
-    "type": "Plant",
-    "type_": "ROSE",
+    "kind": "plant",
+    "tileType": "ROSE",
     "target": { "row": 0, "col": -8 }
   }
 }
@@ -64,6 +77,7 @@ Override with env vars:
 
 - `PAISHO_PORT=8080`
 - `PAISHO_DB_PATH=/data/paisho.db`
+- `PAISHO_JWT_SECRET=<long-random-secret>`
 
 ## Docker / NAS deployment
 
@@ -82,6 +96,7 @@ docker run -d \
   -p 8080:8080 \
   -e PAISHO_PORT=8080 \
   -e PAISHO_DB_PATH=/data/paisho.db \
+  -e PAISHO_JWT_SECRET=replace-with-long-random-value \
   -v /volume1/docker/paisho/data:/data \
   paisho-server:latest
 ```
