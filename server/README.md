@@ -10,7 +10,7 @@ Docker-ready authoritative backend for asynchronous multiplayer:
 
 Authentication:
 
-- `POST /api/v1/auth/issue-token` (public)
+- `POST /api/v1/auth/token` (public)
 - all game endpoints require `Authorization: Bearer <token>`
 
 - `GET /health` (public)
@@ -25,7 +25,7 @@ Authentication:
 
 ### Issue token
 
-`POST /api/v1/auth/issue-token`
+`POST /api/v1/auth/token`
 
 ```json
 {

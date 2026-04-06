@@ -1,5 +1,21 @@
 # Release Notes
 
+## v0.0.18
+
+- Added in-app multiplayer UI screen with controls for:
+  - server URL/player configuration
+  - login/token bootstrap
+  - create online game
+  - refresh active game
+  - join by game ID
+  - list available online games
+- Added multiplayer navigation entry points from both Home and drawer menu.
+- Expanded ViewModel/session state handling for multiplayer busy/error/success flows.
+- Added Ugreen NAS deployment package:
+  - `deploy/ugreen/docker-compose.yml`
+  - `deploy/ugreen/README.md`
+- Updated app version metadata and in-app labels for v0.0.18.
+
 ## v0.0.17
 
 - Added a new Docker-ready multiplayer backend module at `server/` for correspondence play.
