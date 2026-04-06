@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  paisho-server:
+    build:
+      context: ../..
+      dockerfile: server/Dockerfile
+    container_name: paisho-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Replace with a long random secret before first run.
+      PAISHO_JWT_SECRET: "replace-with-very-long-random-secret"
+      PAISHO_DB_PATH: /data/paisho.db
+    volumes:
+      - /volume1/docker/paisho/data:/data

@@ -103,6 +103,15 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
                 NavigationDrawerItem(
+                    label = { Text("Multiplayer") },
+                    selected = state.drawerSection == DrawerSection.Multiplayer,
+                    onClick = {
+                        viewModel.openMultiplayer()
+                        scope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+                NavigationDrawerItem(
                     label = { Text("Existing Games") },
                     selected = state.drawerSection == DrawerSection.ExistingGames,
                     onClick = {
@@ -141,7 +150,10 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
                     .padding(innerPadding)
             ) {
                 when (state.appScreen) {
-                    AppScreen.Home -> HomeScreen(onNewGame = viewModel::startNewGameFlow)
+                    AppScreen.Home -> HomeScreen(
+                        onNewGame = viewModel::startNewGameFlow,
+                        onMultiplayer = viewModel::openMultiplayer,
+                    )
                     AppScreen.NewGameSetup -> NewGameSetupScreen(
                         setup = state.setupState,
                         onOpeningTileSelected = viewModel::toggleOpeningTile,
@@ -149,6 +161,7 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
                         onCreateGame = viewModel::createNewGameFromSetup,
                         onBack = viewModel::openHome
                     )
+                    AppScreen.Multiplayer -> MultiplayerScreen(viewModel = viewModel)
                     AppScreen.Game -> GameScreen(viewModel = viewModel)
                     AppScreen.ExistingGames -> ExistingGamesScreen(
                         existingGames = state.existingGames,
@@ -162,7 +175,10 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
 }
 
 @Composable
-private fun HomeScreen(onNewGame: () -> Unit) {
+private fun HomeScreen(
+    onNewGame: () -> Unit,
+    onMultiplayer: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -177,6 +193,7 @@ private fun HomeScreen(onNewGame: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium
         )
         Button(onClick = onNewGame) { Text("New Game") }
+        Button(onClick = onMultiplayer) { Text("Multiplayer") }
     }
 }
 
