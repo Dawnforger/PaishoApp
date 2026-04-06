@@ -1,5 +1,19 @@
 # Release Notes
 
+## v0.0.21
+
+- Android 16 startup-compatibility hardening release.
+- Upgraded AndroidX app stack to latest stable train:
+  - `androidx.compose:compose-bom:2026.03.01`
+  - `androidx.core:core-ktx:1.18.0`
+  - `androidx.lifecycle:lifecycle-runtime-ktx:2.10.0`
+  - `androidx.lifecycle:lifecycle-runtime-compose:2.10.0`
+  - `androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0`
+  - `androidx.activity:activity-compose:1.13.0`
+- Explicitly pinned `androidx.graphics:graphics-path:1.1.0-rc01` to pick up newer native graphics-path runtime.
+- Keeps the v0.0.20 startup-stabilization rollback baseline while preserving backend/deployment artifacts in-repo.
+- Updated app version metadata and in-app labels for v0.0.21.
+
 ## v0.0.20
 
 - Stabilization rollback: restored the app-layer UI/ViewModel flow to the known-good v0.0.17 baseline to address startup regressions reported after v0.0.18+.
