@@ -13,14 +13,12 @@ enum class AppScreen {
     Home,
     NewGameSetup,
     Game,
-    Multiplayer,
     ExistingGames,
     Settings,
 }
 
 enum class DrawerSection {
     Game,
-    Multiplayer,
     ExistingGames,
     Settings,
 }
@@ -31,14 +29,6 @@ data class ExistingGameSummary(
     val subtitle: String,
 )
 
-data class MultiplayerGameSummary(
-    val gameId: String,
-    val title: String,
-    val status: String,
-    val turnNumber: Int,
-    val currentTurnPlayerId: String?,
-)
-
 data class MultiplayerSession(
     val configured: Boolean = false,
     val baseUrl: String? = null,
@@ -47,9 +37,6 @@ data class MultiplayerSession(
     val playerName: String? = null,
     val gameId: String? = null,
     val serverVersion: Int? = null,
-    val joinGameIdInput: String = "",
-    val isBusy: Boolean = false,
-    val games: List<MultiplayerGameSummary> = emptyList(),
     val lastError: String? = null,
 )
 

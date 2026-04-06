@@ -1,5 +1,11 @@
 # Release Notes
 
+## v0.0.20
+
+- Stabilization rollback: restored the app-layer UI/ViewModel flow to the known-good v0.0.17 baseline to address startup regressions reported after v0.0.18+.
+- Replaced platform-default launcher icon reference with an app-bundled launcher icon resource to avoid system-resource lookup inconsistencies.
+- Updated app version metadata and in-app labels for v0.0.20.
+
 ## v0.0.19
 
 - Hotfix: changed app theme parent from API-29-only `Theme.DeviceDefault.DayNight` to minSdk-compatible `Theme.Material.Light.NoActionBar` to prevent startup crashes on Android 8/9 devices (minSdk 26).
