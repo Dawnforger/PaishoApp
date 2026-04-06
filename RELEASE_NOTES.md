@@ -1,5 +1,11 @@
 # Release Notes
 
+## v0.0.19
+
+- Hotfix: changed app theme parent from API-29-only `Theme.DeviceDefault.DayNight` to minSdk-compatible `Theme.Material.Light.NoActionBar` to prevent startup crashes on Android 8/9 devices (minSdk 26).
+- Includes all v0.0.18 multiplayer UI + Ugreen NAS deployment additions.
+- Updated app version metadata and in-app labels for v0.0.19.
+
 ## v0.0.18
 
 - Added in-app multiplayer UI screen with controls for:
