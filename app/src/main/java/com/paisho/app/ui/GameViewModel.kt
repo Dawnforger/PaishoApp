@@ -144,14 +144,14 @@ class GameViewModel : ViewModel() {
             appendLog("Configure multiplayer before login.")
             return
         }
-        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isLoading = true, lastError = null)) }
+        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = true, lastError = null)) }
         ioScope.launch {
             val result = multiplayerRepository.login()
             result.onSuccess { login ->
                 _uiState.update {
                     it.copy(
                         multiplayerSession = it.multiplayerSession.copy(
-                            isLoading = false,
+                            isBusy = false,
                             token = login.token,
                             playerId = login.playerId,
                             lastError = null,
@@ -161,7 +161,7 @@ class GameViewModel : ViewModel() {
                 appendLog("Multiplayer login successful for ${login.playerId}.")
             }.onFailure { error ->
                 _uiState.update {
-                    it.copy(multiplayerSession = it.multiplayerSession.copy(isLoading = false, lastError = error.message))
+                    it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
                 }
                 appendLog("Multiplayer login failed: ${error.message}")
             }
@@ -180,7 +180,7 @@ class GameViewModel : ViewModel() {
         }
         val accents = _uiState.value.setupState.selectedAccents.takeIf { it.size == 4 }
             ?: listOf(AccentType.ROCK, AccentType.WHEEL, AccentType.KNOTWEED, AccentType.BOAT)
-        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isLoading = true, lastError = null)) }
+        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = true, lastError = null)) }
         ioScope.launch {
             val result = multiplayerRepository.createGame(
                 openingBasicType = _uiState.value.setupState.openingBasicType,
@@ -191,7 +191,7 @@ class GameViewModel : ViewModel() {
                 _uiState.update {
                     it.copy(
                         multiplayerSession = it.multiplayerSession.copy(
-                            isLoading = false,
+                            isBusy = false,
                             gameId = created.summary.gameId,
                             serverVersion = created.summary.version,
                             lastError = null,
@@ -201,7 +201,7 @@ class GameViewModel : ViewModel() {
                 appendLog("Created online game ${created.summary.gameId.take(8)}.")
             }.onFailure { error ->
                 _uiState.update {
-                    it.copy(multiplayerSession = it.multiplayerSession.copy(isLoading = false, lastError = error.message))
+                    it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
                 }
                 appendLog("Create online game failed: ${error.message}")
             }
@@ -214,14 +214,14 @@ class GameViewModel : ViewModel() {
             appendLog("No online game selected to refresh.")
             return
         }
-        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isLoading = true, lastError = null)) }
+        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = true, lastError = null)) }
         ioScope.launch {
             val result = multiplayerRepository.getGame(gameId)
             result.onSuccess { details ->
                 _uiState.update {
                     it.copy(
                         multiplayerSession = it.multiplayerSession.copy(
-                            isLoading = false,
+                            isBusy = false,
                             gameId = details.summary.gameId,
                             serverVersion = details.summary.version,
                             joinGameIdInput = "",
@@ -232,7 +232,7 @@ class GameViewModel : ViewModel() {
                 appendLog("Refreshed online game ${details.summary.gameId.take(8)}.")
             }.onFailure { error ->
                 _uiState.update {
-                    it.copy(multiplayerSession = it.multiplayerSession.copy(isLoading = false, lastError = error.message))
+                    it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
                 }
                 appendLog("Refresh online game failed: ${error.message}")
             }
@@ -249,14 +249,14 @@ class GameViewModel : ViewModel() {
             appendLog("Login to multiplayer before joining an online game.")
             return
         }
-        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isLoading = true, lastError = null)) }
+        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = true, lastError = null)) }
         ioScope.launch {
             val result = multiplayerRepository.joinGame(gameId.trim())
             result.onSuccess { details ->
                 _uiState.update {
                     it.copy(
                         multiplayerSession = it.multiplayerSession.copy(
-                            isLoading = false,
+                            isBusy = false,
                             gameId = details.summary.gameId,
                             serverVersion = details.summary.version,
                             lastError = null,
@@ -266,7 +266,7 @@ class GameViewModel : ViewModel() {
                 appendLog("Joined online game ${details.summary.gameId.take(8)}.")
             }.onFailure { error ->
                 _uiState.update {
-                    it.copy(multiplayerSession = it.multiplayerSession.copy(isLoading = false, lastError = error.message))
+                    it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
                 }
                 appendLog("Join online game failed: ${error.message}")
             }
@@ -279,14 +279,14 @@ class GameViewModel : ViewModel() {
             appendLog("Login to multiplayer before listing online games.")
             return
         }
-        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isLoading = true, lastError = null)) }
+        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = true, lastError = null)) }
         ioScope.launch {
             val result = multiplayerRepository.listGames()
             result.onSuccess { games ->
                 _uiState.update {
                     it.copy(
                         multiplayerSession = it.multiplayerSession.copy(
-                            isLoading = false,
+                            isBusy = false,
                             games = games.map { summary ->
                                 MultiplayerGameSummary(
                                     gameId = summary.gameId,
@@ -303,7 +303,7 @@ class GameViewModel : ViewModel() {
                 appendLog("Loaded ${games.size} online game(s).")
             }.onFailure { error ->
                 _uiState.update {
-                    it.copy(multiplayerSession = it.multiplayerSession.copy(isLoading = false, lastError = error.message))
+                    it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
                 }
                 appendLog("List online games failed: ${error.message}")
             }

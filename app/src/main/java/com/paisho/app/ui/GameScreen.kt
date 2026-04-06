@@ -161,7 +161,21 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
                         onCreateGame = viewModel::createNewGameFromSetup,
                         onBack = viewModel::openHome
                     )
-                    AppScreen.Multiplayer -> MultiplayerScreen(viewModel = viewModel)
+                    AppScreen.Multiplayer -> MultiplayerScreen(
+                        state = state.multiplayerSession,
+                        games = state.existingGames,
+                        onConfigure = { baseUrl, playerId, playerName ->
+                            viewModel.configureMultiplayer(baseUrl, playerId, playerName)
+                            viewModel.loginMultiplayer()
+                        },
+                        onCreateOnlineGame = viewModel::createOnlineGame,
+                        onRefreshOnlineGame = {
+                            viewModel.refreshOnlineGame()
+                            viewModel.listOnlineGames()
+                        },
+                        onJoinOnlineGame = viewModel::joinOnlineGame,
+                        onOpenLocalSetup = viewModel::startNewGameFlow,
+                    )
                     AppScreen.Game -> GameScreen(viewModel = viewModel)
                     AppScreen.ExistingGames -> ExistingGamesScreen(
                         existingGames = state.existingGames,
