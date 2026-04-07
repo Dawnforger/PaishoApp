@@ -46,6 +46,17 @@ Use a long random string.
    - `docker-compose.yml` (build-from-repo compose)
 4. Deploy stack.
 
+### Recommended for zero-manual updates
+
+Use `docker-compose.nas.yml` and keep:
+
+```yaml
+image: ghcr.io/dawnforger/paisho-server:latest
+pull_policy: always
+```
+
+Then each update only requires a stack redeploy/restart; Docker will pull the newest image automatically.
+
 ### If you see `Head ... denied` during deploy
 
 This means GHCR denied anonymous pull for `ghcr.io/dawnforger/paisho-server:latest`.
@@ -57,6 +68,16 @@ build:
 ```
 
 to your real absolute repo path on NAS.
+
+To keep using `docker-compose.nas.yml` without local builds:
+
+1. Make package `ghcr.io/dawnforger/paisho-server` public **or**
+2. Configure GHCR credentials in NAS Docker (`docker login ghcr.io`) for pull access.
+
+This repository includes GitHub Actions workflow `.github/workflows/publish-server-image.yml` so each pushed release tag (`v*`) publishes:
+
+- `ghcr.io/dawnforger/paisho-server:<tag>`
+- `ghcr.io/dawnforger/paisho-server:latest`
 
 ### Option B: CLI (if available)
 

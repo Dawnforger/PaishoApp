@@ -2,6 +2,7 @@ version: "3.9"
 services:
   paisho-server:
     image: ghcr.io/dawnforger/paisho-server:latest
+    pull_policy: always
     container_name: paisho-server
     restart: unless-stopped
     ports:
