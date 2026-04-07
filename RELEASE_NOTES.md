@@ -1,5 +1,15 @@
 # Release Notes
 
+## v0.0.22
+
+- Reintroduced multiplayer UI flow in the app shell after startup stabilization:
+  - Home + drawer navigation to Multiplayer
+  - Multiplayer configuration/login/create/refresh/list/join screen
+  - ViewModel wiring for multiplayer async actions with busy/error state
+- Restored repository support for multiplayer list/join APIs used by the screen.
+- Startup safety preserved: no changes to `MainActivity` boot sequence and no automatic network calls at app launch.
+- Updated app version metadata and in-app labels for v0.0.22.
+
 ## v0.0.21
 
 - Android 16 startup-compatibility hardening release.

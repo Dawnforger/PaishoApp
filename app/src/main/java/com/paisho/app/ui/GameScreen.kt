@@ -103,6 +103,15 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
                     modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
                 )
                 NavigationDrawerItem(
+                    label = { Text("Multiplayer") },
+                    selected = state.drawerSection == DrawerSection.Multiplayer,
+                    onClick = {
+                        viewModel.openMultiplayer()
+                        scope.launch { drawerState.close() }
+                    },
+                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                )
+                NavigationDrawerItem(
                     label = { Text("Existing Games") },
                     selected = state.drawerSection == DrawerSection.ExistingGames,
                     onClick = {
@@ -126,7 +135,7 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Skud Pai Sho v0.0.21") },
+                    title = { Text("Skud Pai Sho v0.0.22") },
                     navigationIcon = {
                         IconButton(onClick = { scope.launch { drawerState.open() } }) {
                             Icon(Icons.Default.Menu, contentDescription = "Open menu")
@@ -141,13 +150,27 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
                     .padding(innerPadding)
             ) {
                 when (state.appScreen) {
-                    AppScreen.Home -> HomeScreen(onNewGame = viewModel::startNewGameFlow)
+                    AppScreen.Home -> HomeScreen(
+                        onNewGame = viewModel::startNewGameFlow,
+                        onMultiplayer = viewModel::openMultiplayer,
+                    )
                     AppScreen.NewGameSetup -> NewGameSetupScreen(
                         setup = state.setupState,
                         onOpeningTileSelected = viewModel::toggleOpeningTile,
                         onAccentToggled = viewModel::toggleAccentSelection,
                         onCreateGame = viewModel::createNewGameFromSetup,
                         onBack = viewModel::openHome
+                    )
+                    AppScreen.Multiplayer -> MultiplayerScreen(
+                        state = state.multiplayerSession,
+                        localGames = state.existingGames,
+                        onSaveConfig = viewModel::configureMultiplayer,
+                        onLogin = viewModel::loginMultiplayer,
+                        onCreateOnlineGame = viewModel::createOnlineGame,
+                        onRefreshOnlineGame = viewModel::refreshOnlineGame,
+                        onListOnlineGames = viewModel::listOnlineGames,
+                        onJoinOnlineGame = viewModel::joinOnlineGame,
+                        onOpenLocalSetup = viewModel::startNewGameFlow,
                     )
                     AppScreen.Game -> GameScreen(viewModel = viewModel)
                     AppScreen.ExistingGames -> ExistingGamesScreen(
@@ -162,7 +185,10 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
 }
 
 @Composable
-private fun HomeScreen(onNewGame: () -> Unit) {
+private fun HomeScreen(
+    onNewGame: () -> Unit,
+    onMultiplayer: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -177,6 +203,7 @@ private fun HomeScreen(onNewGame: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium
         )
         Button(onClick = onNewGame) { Text("New Game") }
+        Button(onClick = onMultiplayer) { Text("Multiplayer") }
     }
 }
 

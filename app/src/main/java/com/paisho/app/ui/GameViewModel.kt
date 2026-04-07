@@ -43,7 +43,7 @@ class GameViewModel : ViewModel() {
     private var stagedHarmonyUndoState: HarmonyUndoState? = null
     private val _uiState = MutableStateFlow(
         state.toUiState(
-            log = listOf("Skud Pai Sho v0.0.21 - full rules engine enabled."),
+            log = listOf("Skud Pai Sho v0.0.22 - full rules engine enabled."),
             selectedTileType = null,
             selectedAccentType = null,
             isAwaitingSubmit = false,
@@ -106,6 +106,10 @@ class GameViewModel : ViewModel() {
         _uiState.update { it.copy(appScreen = AppScreen.Settings, drawerSection = DrawerSection.Settings) }
     }
 
+    fun openMultiplayer() {
+        _uiState.update { it.copy(appScreen = AppScreen.Multiplayer, drawerSection = DrawerSection.Multiplayer) }
+    }
+
     fun configureMultiplayer(baseUrl: String, playerId: String, playerName: String) {
         if (baseUrl.isBlank() || playerId.isBlank()) {
             appendLog("Multiplayer config requires base URL and player ID.")
@@ -119,11 +123,45 @@ class GameViewModel : ViewModel() {
                     baseUrl = baseUrl,
                     playerId = playerId,
                     playerName = playerName.ifBlank { null },
+                    token = null,
+                    gameId = null,
+                    serverVersion = null,
+                    games = emptyList(),
                     lastError = null,
                 ),
             )
         }
         appendLog("Multiplayer configured for player $playerId.")
+    }
+
+    fun loginMultiplayer() {
+        val session = _uiState.value.multiplayerSession
+        if (!session.configured) {
+            appendLog("Configure multiplayer before login.")
+            return
+        }
+        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = true, lastError = null)) }
+        ioScope.launch {
+            val result = multiplayerRepository.login()
+            result.onSuccess { login ->
+                _uiState.update {
+                    it.copy(
+                        multiplayerSession = it.multiplayerSession.copy(
+                            isBusy = false,
+                            token = login.token,
+                            playerId = login.playerId,
+                            lastError = null,
+                        ),
+                    )
+                }
+                appendLog("Multiplayer login successful for ${login.playerId}.")
+            }.onFailure { error ->
+                _uiState.update {
+                    it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
+                }
+                appendLog("Multiplayer login failed: ${error.message}")
+            }
+        }
     }
 
     fun createOnlineGame() {
@@ -132,8 +170,13 @@ class GameViewModel : ViewModel() {
             appendLog("Configure multiplayer before creating an online game.")
             return
         }
+        if (session.token.isNullOrBlank()) {
+            appendLog("Login to multiplayer before creating an online game.")
+            return
+        }
         val accents = _uiState.value.setupState.selectedAccents.takeIf { it.size == 4 }
             ?: listOf(AccentType.ROCK, AccentType.WHEEL, AccentType.KNOTWEED, AccentType.BOAT)
+        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = true, lastError = null)) }
         ioScope.launch {
             val result = multiplayerRepository.createGame(
                 openingBasicType = _uiState.value.setupState.openingBasicType,
@@ -144,6 +187,7 @@ class GameViewModel : ViewModel() {
                 _uiState.update {
                     it.copy(
                         multiplayerSession = it.multiplayerSession.copy(
+                            isBusy = false,
                             gameId = created.summary.gameId,
                             serverVersion = created.summary.version,
                             lastError = null,
@@ -152,7 +196,9 @@ class GameViewModel : ViewModel() {
                 }
                 appendLog("Created online game ${created.summary.gameId.take(8)}.")
             }.onFailure { error ->
-                _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(lastError = error.message)) }
+                _uiState.update {
+                    it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
+                }
                 appendLog("Create online game failed: ${error.message}")
             }
         }
@@ -164,12 +210,14 @@ class GameViewModel : ViewModel() {
             appendLog("No online game selected to refresh.")
             return
         }
+        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = true, lastError = null)) }
         ioScope.launch {
             val result = multiplayerRepository.getGame(gameId)
             result.onSuccess { details ->
                 _uiState.update {
                     it.copy(
                         multiplayerSession = it.multiplayerSession.copy(
+                            isBusy = false,
                             gameId = details.summary.gameId,
                             serverVersion = details.summary.version,
                             lastError = null,
@@ -178,8 +226,81 @@ class GameViewModel : ViewModel() {
                 }
                 appendLog("Refreshed online game ${details.summary.gameId.take(8)}.")
             }.onFailure { error ->
-                _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(lastError = error.message)) }
+                _uiState.update {
+                    it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
+                }
                 appendLog("Refresh online game failed: ${error.message}")
+            }
+        }
+    }
+
+    fun joinOnlineGame(gameId: String) {
+        if (gameId.isBlank()) {
+            appendLog("Game ID is required to join an online game.")
+            return
+        }
+        val session = _uiState.value.multiplayerSession
+        if (session.token.isNullOrBlank()) {
+            appendLog("Login to multiplayer before joining an online game.")
+            return
+        }
+        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = true, lastError = null)) }
+        ioScope.launch {
+            val result = multiplayerRepository.joinGame(gameId.trim())
+            result.onSuccess { details ->
+                _uiState.update {
+                    it.copy(
+                        multiplayerSession = it.multiplayerSession.copy(
+                            isBusy = false,
+                            gameId = details.summary.gameId,
+                            serverVersion = details.summary.version,
+                            lastError = null,
+                        ),
+                    )
+                }
+                appendLog("Joined online game ${details.summary.gameId.take(8)}.")
+            }.onFailure { error ->
+                _uiState.update {
+                    it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
+                }
+                appendLog("Join online game failed: ${error.message}")
+            }
+        }
+    }
+
+    fun listOnlineGames() {
+        val session = _uiState.value.multiplayerSession
+        if (session.token.isNullOrBlank()) {
+            appendLog("Login to multiplayer before listing online games.")
+            return
+        }
+        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = true, lastError = null)) }
+        ioScope.launch {
+            val result = multiplayerRepository.listGames()
+            result.onSuccess { games ->
+                _uiState.update {
+                    it.copy(
+                        multiplayerSession = it.multiplayerSession.copy(
+                            isBusy = false,
+                            games = games.map { summary ->
+                                MultiplayerGameSummary(
+                                    gameId = summary.gameId,
+                                    title = summary.title,
+                                    status = summary.status.name,
+                                    turnNumber = summary.turnNumber,
+                                    currentTurnPlayerId = summary.currentTurnPlayerId,
+                                )
+                            },
+                            lastError = null,
+                        ),
+                    )
+                }
+                appendLog("Loaded ${games.size} online game(s).")
+            }.onFailure { error ->
+                _uiState.update {
+                    it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
+                }
+                appendLog("List online games failed: ${error.message}")
             }
         }
     }
