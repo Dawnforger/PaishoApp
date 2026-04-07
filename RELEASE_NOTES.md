@@ -1,5 +1,13 @@
 # Release Notes
 
+## v0.0.24
+
+- Fixed Android cleartext policy block for NAS/HTTP multiplayer endpoints by enabling cleartext traffic in app manifest.
+- Resolves runtime error when connecting to HTTP server URLs:
+  - `CLEARTEXT communication to <host> not permitted by network security policy`
+- No startup-sequence changes; fix is limited to manifest network policy configuration.
+- Updated app version metadata and in-app labels for v0.0.24.
+
 ## v0.0.23
 
 - Fixed multiplayer connect runtime failure caused by missing generated serializers:
