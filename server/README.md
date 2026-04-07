@@ -87,6 +87,14 @@ Build image:
 docker build -f server/Dockerfile -t paisho-server:latest .
 ```
 
+Build and export a portable image tarball (for NAS upload/import):
+
+```bash
+docker build -f server/Dockerfile -t paisho-server:v0.0.22 .
+docker save paisho-server:v0.0.22 -o paisho-server-v0.0.22-docker-image.tar
+gzip -f paisho-server-v0.0.22-docker-image.tar
+```
+
 Run container:
 
 ```bash
