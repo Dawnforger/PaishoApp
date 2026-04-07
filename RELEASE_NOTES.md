@@ -1,5 +1,13 @@
 # Release Notes
 
+## v0.0.23
+
+- Fixed multiplayer connect runtime failure caused by missing generated serializers:
+  - applied `org.jetbrains.kotlin.plugin.serialization` in `:app` module build plugins
+  - resolves error: `Serializer for class 'LoginRequestDto' is not found`
+- No startup-sequence changes; fix is limited to app module serialization codegen configuration.
+- Updated app version metadata and in-app labels for v0.0.23.
+
 ## v0.0.22
 
 - Reintroduced multiplayer UI flow in the app shell after startup stabilization:
