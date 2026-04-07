@@ -4,7 +4,8 @@ This directory contains a Ugreen-friendly Docker Compose file for the multiplaye
 
 ## Files
 
-- `docker-compose.yml` - ready for import in Ugreen Docker app compose workflow
+- `docker-compose.yml` - build-from-repo compose (requires repository files on NAS)
+- `docker-compose.nas.yml` - paste-friendly compose using prebuilt GHCR image
 
 ## 1) Prepare on Ugreen NAS
 
@@ -38,7 +39,8 @@ Use a long random string.
 
 1. Open Ugreen Docker app.
 2. Choose **Compose / Stack**.
-3. Import or paste `docker-compose.yml` from `deploy/ugreen/`.
+3. Import or paste `docker-compose.nas.yml` from `deploy/ugreen/` if you want the simplest setup.
+   - Use `docker-compose.yml` only when building directly from a checked-out repo on the NAS.
 4. Deploy stack.
 
 ### Option B: CLI (if available)
