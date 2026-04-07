@@ -8,6 +8,9 @@
   - ViewModel wiring for multiplayer async actions with busy/error state
 - Restored repository support for multiplayer list/join APIs used by the screen.
 - Startup safety preserved: no changes to `MainActivity` boot sequence and no automatic network calls at app launch.
+- Added distributable server container image artifact for easier NAS deployment:
+  - `paisho-server-v0.0.22-docker-image.tar.gz`
+  - import command: `docker load -i paisho-server-v0.0.22-docker-image.tar.gz`
 - Updated app version metadata and in-app labels for v0.0.22.
 
 ## v0.0.21
