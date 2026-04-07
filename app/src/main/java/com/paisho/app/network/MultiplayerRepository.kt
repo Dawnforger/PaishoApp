@@ -54,4 +54,22 @@ class MultiplayerRepository(
         activeGameId = details.summary.gameId
         details
     }
+
+    suspend fun listGames(): Result<List<GameSummaryDto>> = runCatching {
+        val auth = token ?: error("Login required before listing games.")
+        api.listGames(baseUrl = baseUrl, token = auth).games
+    }
+
+    suspend fun joinGame(gameId: String): Result<GameDetailsDto> = runCatching {
+        val auth = token ?: error("Login required before joining online game.")
+        require(gameId.isNotBlank()) { "gameId cannot be blank." }
+        val details = api.joinGame(
+            baseUrl = baseUrl,
+            token = auth,
+            gameId = gameId,
+            request = JoinGameRequestDto(),
+        )
+        activeGameId = details.summary.gameId
+        details
+    }
 }
