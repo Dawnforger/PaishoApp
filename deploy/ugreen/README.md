@@ -6,6 +6,7 @@ This directory contains a Ugreen-friendly Docker Compose file for the multiplaye
 
 - `docker-compose.yml` - build-from-repo compose (requires repository files on NAS)
 - `docker-compose.nas.yml` - paste-friendly compose using prebuilt GHCR image
+- `docker-compose.nas-build.yml` - paste-friendly compose that builds locally from an absolute NAS path
 
 ## 1) Prepare on Ugreen NAS
 
@@ -39,9 +40,23 @@ Use a long random string.
 
 1. Open Ugreen Docker app.
 2. Choose **Compose / Stack**.
-3. Import or paste `docker-compose.nas.yml` from `deploy/ugreen/` if you want the simplest setup.
-   - Use `docker-compose.yml` only when building directly from a checked-out repo on the NAS.
+3. Import or paste one of these files from `deploy/ugreen/`:
+   - `docker-compose.nas.yml` (pulls `ghcr.io/dawnforger/paisho-server:latest`)
+   - `docker-compose.nas-build.yml` (builds from local repo path on NAS)
+   - `docker-compose.yml` (build-from-repo compose)
 4. Deploy stack.
+
+### If you see `Head ... denied` during deploy
+
+This means GHCR denied anonymous pull for `ghcr.io/dawnforger/paisho-server:latest`.
+Use `docker-compose.nas-build.yml` and set:
+
+```yaml
+build:
+  context: /volume1/docker/paisho/PaishoApp
+```
+
+to your real absolute repo path on NAS.
 
 ### Option B: CLI (if available)
 
