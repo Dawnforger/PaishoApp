@@ -52,7 +52,7 @@ class GameViewModel(application: Application) : AndroidViewModel(application) {
     private var stagedHarmonyUndoState: HarmonyUndoState? = null
     private val _uiState = MutableStateFlow(
         state.toUiState(
-            log = listOf("Skud Pai Sho v0.0.25 - full rules engine enabled."),
+            log = listOf("Skud Pai Sho v0.0.26 - full rules engine enabled."),
             selectedTileType = null,
             selectedAccentType = null,
             isAwaitingSubmit = false,
