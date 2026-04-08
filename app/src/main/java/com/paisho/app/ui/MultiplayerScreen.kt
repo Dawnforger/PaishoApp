@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -37,6 +39,8 @@ fun MultiplayerScreen(
     onListOnlineGames: () -> Unit,
     onJoinOnlineGame: (String) -> Unit,
     onOpenOnlineGame: (String) -> Unit,
+    onSelectSavedServer: (String) -> Unit,
+    onStartNewServerDraft: () -> Unit,
     onOpenLocalSetup: () -> Unit,
     onOpenExistingGame: (String) -> Unit,
 ) {
@@ -44,6 +48,8 @@ fun MultiplayerScreen(
     var playerId by remember(state.playerId) { mutableStateOf(state.playerId.orEmpty()) }
     var playerName by remember(state.playerName) { mutableStateOf(state.playerName.orEmpty()) }
     var joinGameId by remember(state.joinGameIdInput) { mutableStateOf(state.joinGameIdInput) }
+    var serverMenuExpanded by remember { mutableStateOf(false) }
+    val selectedServer = state.savedServers.firstOrNull { it.id == state.selectedServerId }
 
     LazyColumn(
         modifier = Modifier
@@ -67,6 +73,38 @@ fun MultiplayerScreen(
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    if (state.savedServers.isNotEmpty()) {
+                        Text("Preferred server profile", fontWeight = FontWeight.SemiBold)
+                        Button(onClick = { serverMenuExpanded = true }, enabled = !state.isBusy) {
+                            Text(selectedServer?.name ?: "Select saved server")
+                        }
+                        DropdownMenu(
+                            expanded = serverMenuExpanded,
+                            onDismissRequest = { serverMenuExpanded = false },
+                        ) {
+                            state.savedServers.forEach { server ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(server.name, style = MaterialTheme.typography.bodyMedium)
+                                            Text(
+                                                "${server.playerId} @ ${server.baseUrl}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        serverMenuExpanded = false
+                                        onSelectSavedServer(server.id)
+                                    }
+                                )
+                            }
+                        }
+                        Text(
+                            "Saved servers: ${state.savedServers.size}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
                     OutlinedTextField(
                         value = baseUrl,
                         onValueChange = { baseUrl = it },
@@ -92,8 +130,9 @@ fun MultiplayerScreen(
                         Button(
                             onClick = { onSaveConfig(baseUrl.trim(), playerId.trim(), playerName.trim()) },
                             enabled = !state.isBusy,
-                        ) { Text("Save Config") }
+                        ) { Text("Save Server") }
                         Button(onClick = onLogin, enabled = state.configured && !state.isBusy) { Text("Login") }
+                        TextButton(onClick = onStartNewServerDraft, enabled = !state.isBusy) { Text("New") }
                     }
                     TextButton(onClick = onOpenLocalSetup) { Text("Local Game Setup") }
                     Spacer(Modifier.height(4.dp))

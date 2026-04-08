@@ -174,6 +174,8 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
                             onListOnlineGames = viewModel::listOnlineGames,
                             onJoinOnlineGame = viewModel::joinOnlineGame,
                             onOpenOnlineGame = viewModel::openOnlineGameFromMultiplayer,
+                        onSelectSavedServer = viewModel::selectSavedServer,
+                        onStartNewServerDraft = viewModel::startNewSavedServerDraft,
                             onOpenExistingGame = viewModel::resumeGame,
                             onOpenLocalSetup = viewModel::startNewGameFlow,
                         )
