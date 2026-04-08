@@ -1,5 +1,17 @@
 # Release Notes
 
+## v0.0.25
+
+- Added clickable online game access across multiplayer flows:
+  - server-created games now appear in Existing Games
+  - multiplayer online list entries are tappable to open
+  - waiting games support tap-to-join for second-player entry
+- Added in-app Settings controls for:
+  - light/dark theme selection
+  - move hint overlays
+  - harmony line highlight overlays
+- Updated app version metadata and in-app labels for v0.0.25.
+
 ## v0.0.24
 
 - Fixed Android cleartext policy block for NAS/HTTP multiplayer endpoints by enabling cleartext traffic in app manifest.

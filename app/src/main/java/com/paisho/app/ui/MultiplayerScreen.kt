@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -35,7 +36,9 @@ fun MultiplayerScreen(
     onRefreshOnlineGame: () -> Unit,
     onListOnlineGames: () -> Unit,
     onJoinOnlineGame: (String) -> Unit,
+    onOpenOnlineGame: (String) -> Unit,
     onOpenLocalSetup: () -> Unit,
+    onOpenExistingGame: (String) -> Unit,
 ) {
     var baseUrl by remember(state.baseUrl) { mutableStateOf(state.baseUrl.orEmpty()) }
     var playerId by remember(state.playerId) { mutableStateOf(state.playerId.orEmpty()) }
@@ -155,7 +158,11 @@ fun MultiplayerScreen(
             item { Text("No online games loaded.") }
         } else {
             items(state.games) { game ->
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenOnlineGame(game.gameId) }
+                ) {
                     Column(modifier = Modifier.padding(10.dp)) {
                         Text(game.title, fontWeight = FontWeight.Medium)
                         Text("ID: ${game.gameId}", style = MaterialTheme.typography.bodySmall)
@@ -163,6 +170,7 @@ fun MultiplayerScreen(
                             "${game.status} | turn ${game.turnNumber} | current: ${game.currentTurnPlayerId ?: "-"}",
                             style = MaterialTheme.typography.bodySmall,
                         )
+                        Text("Tap to open", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
@@ -175,10 +183,15 @@ fun MultiplayerScreen(
             item { Text("No saved local games yet.") }
         } else {
             items(localGames) { game ->
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenExistingGame(game.id) }
+                ) {
                     Column(modifier = Modifier.padding(10.dp)) {
                         Text(game.title, fontWeight = FontWeight.Medium)
                         Text(game.subtitle, style = MaterialTheme.typography.bodySmall)
+                        Text("Tap to open", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
