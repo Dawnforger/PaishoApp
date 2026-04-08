@@ -59,6 +59,7 @@ class GameViewModel : ViewModel() {
             harmonyBonusAccentOptions = emptySet(),
             canChooseNoBonus = false,
             projectedBoardSnapshot = emptyMap(),
+            settings = AppSettings(),
             onlineGameView = null,
             setupState = NewGameSetupState(),
             existingGames = emptyList(),
@@ -109,6 +110,7 @@ class GameViewModel : ViewModel() {
             harmonyBonusAccentOptions = emptySet(),
             canChooseNoBonus = false,
             projectedBoardSnapshot = emptyMap(),
+            settings = _uiState.value.settings,
             onlineGameView = null,
             setupState = _uiState.value.setupState,
             existingGames = existing,
@@ -120,6 +122,27 @@ class GameViewModel : ViewModel() {
 
     fun openSettings() {
         _uiState.update { it.copy(appScreen = AppScreen.Settings, drawerSection = DrawerSection.Settings) }
+    }
+
+    fun setThemeMode(themeMode: AppThemeMode) {
+        if (_uiState.value.settings.themeMode == themeMode) return
+        _uiState.update { it.copy(settings = it.settings.copy(themeMode = themeMode)) }
+        publishState(clearSelection = false)
+        appendLog("Theme set to ${themeMode.name.lowercase()}.")
+    }
+
+    fun setShowHarmonyLines(enabled: Boolean) {
+        if (_uiState.value.settings.showHarmonyLines == enabled) return
+        _uiState.update { it.copy(settings = it.settings.copy(showHarmonyLines = enabled)) }
+        publishState(clearSelection = false)
+        appendLog("Harmony line highlights ${if (enabled) "enabled" else "disabled"}.")
+    }
+
+    fun setShowMoveHints(enabled: Boolean) {
+        if (_uiState.value.settings.showMoveHints == enabled) return
+        _uiState.update { it.copy(settings = it.settings.copy(showMoveHints = enabled)) }
+        publishState(clearSelection = false)
+        appendLog("Move hints ${if (enabled) "enabled" else "disabled"}.")
     }
 
     fun openMultiplayer() {
@@ -431,6 +454,7 @@ class GameViewModel : ViewModel() {
             harmonyBonusAccentOptions = emptySet(),
             canChooseNoBonus = false,
             projectedBoardSnapshot = emptyMap(),
+            settings = _uiState.value.settings,
             onlineGameView = null,
             setupState = setup,
             existingGames = updatedExistingGames,
@@ -720,6 +744,7 @@ class GameViewModel : ViewModel() {
             harmonyBonusAccentOptions = harmonyBonusAccentOptions(),
             canChooseNoBonus = isHarmonyBonusPending(),
             projectedBoardSnapshot = pendingHarmonyPreviewState?.boardSnapshot() ?: emptyMap(),
+            settings = _uiState.value.settings,
             onlineGameView = _uiState.value.onlineGameView,
             setupState = _uiState.value.setupState,
             existingGames = currentExisting,
@@ -746,6 +771,7 @@ class GameViewModel : ViewModel() {
         harmonyBonusAccentOptions: Set<AccentType>,
         canChooseNoBonus: Boolean,
         projectedBoardSnapshot: Map<Position, String>,
+        settings: AppSettings,
         onlineGameView: OnlineGameView?,
         setupState: NewGameSetupState,
         existingGames: List<ExistingGameSummary>,
@@ -765,6 +791,34 @@ class GameViewModel : ViewModel() {
         val effectiveDraw = onlineGameView?.isDraw ?: isDraw
         val effectiveEndReason = onlineGameView?.endReason ?: endReason
         val effectiveIsGameOver = effectiveWinner != null || effectiveDraw || effectivePhase == GamePhase.FINISHED
+        val harmonyLines = if (settings.showHarmonyLines && !isOnlineView) {
+            Rules.computeHarmonies(this).map { harmony ->
+                HarmonyLineOverlay(
+                    from = harmony.a,
+                    to = harmony.b,
+                    owner = harmony.owner,
+                )
+            }
+        } else {
+            emptyList()
+        }
+        val moveHintTargets = if (
+            settings.showMoveHints &&
+            !isOnlineView &&
+            !isAwaitingSubmit &&
+            selectedSource == null &&
+            selectedTileType == null &&
+            selectedAccentType == null &&
+            currentPlayer == Player.HUMAN &&
+            phase == GamePhase.PLAYING
+        ) {
+            Rules.legalMoves(this)
+                .filterIsInstance<Move.Slide>()
+                .map { it.target }
+                .toSet()
+        } else {
+            emptySet()
+        }
 
         return GameUiState(
         boardSize = rules.boardSize,
@@ -796,6 +850,9 @@ class GameViewModel : ViewModel() {
         flowerReserveCounts = flowerCounts,
         accentReserveCounts = accentCounts,
         boardSnapshot = effectiveBoardSnapshot,
+        harmonyLines = harmonyLines,
+        moveHintTargets = moveHintTargets,
+        settings = settings,
         onlineGameView = onlineGameView,
         eventLog = log,
         isGameOver = effectiveIsGameOver,

@@ -40,6 +40,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,6 +62,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.paisho.app.ui.theme.PaiShoTheme
 import kotlinx.coroutines.launch
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.rememberDrawerState
@@ -82,104 +84,111 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        gesturesEnabled = false,
-        drawerContent = {
-            ModalDrawerSheet {
-                Text(
-                    text = "Pai Sho",
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                NavigationDrawerItem(
-                    label = { Text("Game") },
-                    selected = state.drawerSection == DrawerSection.Game,
-                    onClick = {
-                        viewModel.openHome()
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
-                NavigationDrawerItem(
-                    label = { Text("Multiplayer") },
-                    selected = state.drawerSection == DrawerSection.Multiplayer,
-                    onClick = {
-                        viewModel.openMultiplayer()
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
-                NavigationDrawerItem(
-                    label = { Text("Existing Games") },
-                    selected = state.drawerSection == DrawerSection.ExistingGames,
-                    onClick = {
-                        viewModel.openExistingGames()
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
-                NavigationDrawerItem(
-                    label = { Text("Settings") },
-                    selected = state.drawerSection == DrawerSection.Settings,
-                    onClick = {
-                        viewModel.openSettings()
-                        scope.launch { drawerState.close() }
-                    },
-                    modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
-                )
+    PaiShoTheme(darkTheme = state.settings.themeMode == AppThemeMode.DARK) {
+        ModalNavigationDrawer(
+            drawerState = drawerState,
+            gesturesEnabled = false,
+            drawerContent = {
+                ModalDrawerSheet {
+                    Text(
+                        text = "Pai Sho",
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    NavigationDrawerItem(
+                        label = { Text("Game") },
+                        selected = state.drawerSection == DrawerSection.Game,
+                        onClick = {
+                            viewModel.openHome()
+                            scope.launch { drawerState.close() }
+                        },
+                        modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                    )
+                    NavigationDrawerItem(
+                        label = { Text("Multiplayer") },
+                        selected = state.drawerSection == DrawerSection.Multiplayer,
+                        onClick = {
+                            viewModel.openMultiplayer()
+                            scope.launch { drawerState.close() }
+                        },
+                        modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                    )
+                    NavigationDrawerItem(
+                        label = { Text("Existing Games") },
+                        selected = state.drawerSection == DrawerSection.ExistingGames,
+                        onClick = {
+                            viewModel.openExistingGames()
+                            scope.launch { drawerState.close() }
+                        },
+                        modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                    )
+                    NavigationDrawerItem(
+                        label = { Text("Settings") },
+                        selected = state.drawerSection == DrawerSection.Settings,
+                        onClick = {
+                            viewModel.openSettings()
+                            scope.launch { drawerState.close() }
+                        },
+                        modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                    )
+                }
             }
-        }
-    ) {
-        Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("Skud Pai Sho v0.0.24") },
-                    navigationIcon = {
-                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                            Icon(Icons.Default.Menu, contentDescription = "Open menu")
+        ) {
+            Scaffold(
+                topBar = {
+                    TopAppBar(
+                        title = { Text("Skud Pai Sho v0.0.24") },
+                        navigationIcon = {
+                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                Icon(Icons.Default.Menu, contentDescription = "Open menu")
+                            }
                         }
+                    )
+                }
+            ) { innerPadding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    when (state.appScreen) {
+                        AppScreen.Home -> HomeScreen(
+                            onNewGame = viewModel::startNewGameFlow,
+                            onMultiplayer = viewModel::openMultiplayer,
+                        )
+                        AppScreen.NewGameSetup -> NewGameSetupScreen(
+                            setup = state.setupState,
+                            onOpeningTileSelected = viewModel::toggleOpeningTile,
+                            onAccentToggled = viewModel::toggleAccentSelection,
+                            onCreateGame = viewModel::createNewGameFromSetup,
+                            onBack = viewModel::openHome
+                        )
+                        AppScreen.Multiplayer -> MultiplayerScreen(
+                            state = state.multiplayerSession,
+                            localGames = state.existingGames.filter { it.type == ExistingGameType.LOCAL },
+                            onSaveConfig = viewModel::configureMultiplayer,
+                            onLogin = viewModel::loginMultiplayer,
+                            onCreateOnlineGame = viewModel::createOnlineGame,
+                            onRefreshOnlineGame = viewModel::refreshOnlineGame,
+                            onListOnlineGames = viewModel::listOnlineGames,
+                            onJoinOnlineGame = viewModel::joinOnlineGame,
+                            onOpenOnlineGame = viewModel::openOnlineGameFromMultiplayer,
+                            onOpenExistingGame = viewModel::resumeGame,
+                            onOpenLocalSetup = viewModel::startNewGameFlow,
+                        )
+                        AppScreen.Game -> GameScreen(viewModel = viewModel)
+                        AppScreen.ExistingGames -> ExistingGamesScreen(
+                            existingGames = state.existingGames,
+                            onResume = viewModel::resumeGame
+                        )
+                        AppScreen.Settings -> SettingsScreen(
+                            settings = state.settings,
+                            onThemeSelected = viewModel::setThemeMode,
+                            onShowMoveHintsChanged = viewModel::setShowMoveHints,
+                            onShowHarmonyLinesChanged = viewModel::setShowHarmonyLines,
+                        )
                     }
-                )
-            }
-        ) { innerPadding ->
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                when (state.appScreen) {
-                    AppScreen.Home -> HomeScreen(
-                        onNewGame = viewModel::startNewGameFlow,
-                        onMultiplayer = viewModel::openMultiplayer,
-                    )
-                    AppScreen.NewGameSetup -> NewGameSetupScreen(
-                        setup = state.setupState,
-                        onOpeningTileSelected = viewModel::toggleOpeningTile,
-                        onAccentToggled = viewModel::toggleAccentSelection,
-                        onCreateGame = viewModel::createNewGameFromSetup,
-                        onBack = viewModel::openHome
-                    )
-                    AppScreen.Multiplayer -> MultiplayerScreen(
-                        state = state.multiplayerSession,
-                        localGames = state.existingGames.filter { it.type == ExistingGameType.LOCAL },
-                        onSaveConfig = viewModel::configureMultiplayer,
-                        onLogin = viewModel::loginMultiplayer,
-                        onCreateOnlineGame = viewModel::createOnlineGame,
-                        onRefreshOnlineGame = viewModel::refreshOnlineGame,
-                        onListOnlineGames = viewModel::listOnlineGames,
-                        onJoinOnlineGame = viewModel::joinOnlineGame,
-                        onOpenOnlineGame = viewModel::openOnlineGameFromMultiplayer,
-                        onOpenExistingGame = viewModel::resumeGame,
-                        onOpenLocalSetup = viewModel::startNewGameFlow,
-                    )
-                    AppScreen.Game -> GameScreen(viewModel = viewModel)
-                    AppScreen.ExistingGames -> ExistingGamesScreen(
-                        existingGames = state.existingGames,
-                        onResume = viewModel::resumeGame
-                    )
-                    AppScreen.Settings -> SettingsScreen()
                 }
             }
         }
@@ -309,18 +318,70 @@ private fun ExistingGamesScreen(
 }
 
 @Composable
-private fun SettingsScreen() {
+private fun SettingsScreen(
+    settings: AppSettings,
+    onThemeSelected: (AppThemeMode) -> Unit,
+    onShowMoveHintsChanged: (Boolean) -> Unit,
+    onShowHarmonyLinesChanged: (Boolean) -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text("Settings menu scaffolded for upcoming preferences:")
-        Text("- Enable move hints")
-        Text("- Toggle harmony overlays")
-        Text("- Theme selection")
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text("Theme", fontWeight = FontWeight.SemiBold)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { onThemeSelected(AppThemeMode.LIGHT) },
+                        enabled = settings.themeMode != AppThemeMode.LIGHT,
+                    ) { Text("Light") }
+                    Button(
+                        onClick = { onThemeSelected(AppThemeMode.DARK) },
+                        enabled = settings.themeMode != AppThemeMode.DARK,
+                    ) { Text("Dark") }
+                }
+            }
+        }
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Move hints")
+                    Switch(
+                        checked = settings.showMoveHints,
+                        onCheckedChange = onShowMoveHintsChanged,
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Harmony line highlights")
+                    Switch(
+                        checked = settings.showHarmonyLines,
+                        onCheckedChange = onShowHarmonyLinesChanged,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -356,9 +417,11 @@ fun GameScreen(viewModel: GameViewModel) {
                     selectedSource = state.selectedSource,
                     selectedTarget = state.selectedTarget,
                     legalTargets = state.legalTargets,
+                    moveHintTargets = state.moveHintTargets,
                     legalPositions = state.legalPositions,
                     zoneByPosition = state.zoneByPosition,
                     boardVisualConfig = state.boardVisualConfig,
+                    harmonyLines = state.harmonyLines,
                     onTileClick = viewModel::onPositionSelected,
                     cells = state.boardSnapshot,
                     projectedCells = state.projectedBoardSnapshot,
@@ -500,9 +563,11 @@ private fun CircularBoard(
     selectedSource: Position?,
     selectedTarget: Position?,
     legalTargets: Set<Position>,
+    moveHintTargets: Set<Position>,
     legalPositions: Set<Position>,
     zoneByPosition: Map<Position, BoardZone>,
     boardVisualConfig: BoardVisualConfig,
+    harmonyLines: List<HarmonyLineOverlay>,
     onTileClick: (Position) -> Unit,
     cells: Map<Position, String>,
     projectedCells: Map<Position, String>,
@@ -512,7 +577,7 @@ private fun CircularBoard(
     val playableRadiusFraction = 0.975f
 
     val allPoints = legalPositions.sortedWith(compareByDescending<Position> { it.row }.thenBy { it.col })
-    val interactivePoints = (legalTargets + selectedSource + selectedTarget).filterNotNull().toSet()
+    val interactivePoints = (legalTargets + selectedSource + selectedTarget + moveHintTargets).filterNotNull().toSet()
 
     val sourceHighlightColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
     val targetHighlightColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
@@ -593,6 +658,11 @@ private fun CircularBoard(
                 }
             }
 
+            fun pointOffset(position: Position): Offset = Offset(
+                x = center.x + position.col * step,
+                y = center.y - position.row * step,
+            )
+
             // Draw board lattice lines between legal intersections, so pieces sit on line crossings.
             for (row in coordinateExtent downTo -coordinateExtent) {
                 var prev: Offset? = null
@@ -649,6 +719,21 @@ private fun CircularBoard(
                 )
                 drawCircle(color = Color(0xFF1F1A1B), radius = markerRadius, center = marker)
             }
+
+            for (line in harmonyLines) {
+                if (line.from !in legalPositions || line.to !in legalPositions) continue
+                val lineColor = when (line.owner) {
+                    Player.HUMAN -> Color(0x804F9BFF)
+                    Player.AI -> Color(0x80FF7B7B)
+                }
+                drawLine(
+                    color = lineColor,
+                    start = pointOffset(line.from),
+                    end = pointOffset(line.to),
+                    strokeWidth = 4f,
+                    cap = StrokeCap.Round,
+                )
+            }
             drawCircle(color = Color(0xFF2D2527), radius = radius * 0.998f, center = center, style = Stroke(width = 4f))
 
             // Draw selection/interaction highlights and piece tokens from the same pixel geometry.
@@ -667,8 +752,9 @@ private fun CircularBoard(
                 val isTarget = selectedTarget == position
                 val isLegalTarget = position in legalTargets
                 val isInteractiveHint = position in interactivePoints
+                val isMoveHint = position in moveHintTargets
                 val hasProjectedChange = projectedToken != token
-                if (token.isEmpty() && projectedToken.isEmpty() && !isSource && !isTarget && !isLegalTarget && !isInteractiveHint) continue
+                if (token.isEmpty() && projectedToken.isEmpty() && !isSource && !isTarget && !isLegalTarget && !isInteractiveHint && !isMoveHint) continue
 
                 val p = Offset(
                     x = center.x + position.col * step,
@@ -678,6 +764,7 @@ private fun CircularBoard(
                     isSource -> sourceHighlightColor
                     isTarget -> targetHighlightColor
                     isLegalTarget -> Color(0x8042A85A)
+                    isMoveHint -> Color(0x3342A85A)
                     isInteractiveHint -> Color(0x22000000)
                     else -> Color.Transparent
                 }

@@ -83,6 +83,23 @@ data class OnlineGameView(
     val endReason: GameEndReason?,
 )
 
+enum class AppThemeMode {
+    LIGHT,
+    DARK,
+}
+
+data class AppSettings(
+    val themeMode: AppThemeMode = AppThemeMode.LIGHT,
+    val showHarmonyLines: Boolean = true,
+    val showMoveHints: Boolean = true,
+)
+
+data class HarmonyLineOverlay(
+    val from: Position,
+    val to: Position,
+    val owner: Player,
+)
+
 data class BoardVisualConfig(
     val backgroundImageResId: Int? = null,
     val backgroundScale: Float = 1f,
@@ -126,6 +143,9 @@ data class GameUiState(
     val harmonyBonusFlowerOptions: Set<TileType> = emptySet(),
     val harmonyBonusAccentOptions: Set<AccentType> = emptySet(),
     val boardSnapshot: Map<Position, String> = emptyMap(),
+    val harmonyLines: List<HarmonyLineOverlay> = emptyList(),
+    val moveHintTargets: Set<Position> = emptySet(),
+    val settings: AppSettings = AppSettings(),
     val onlineGameView: OnlineGameView? = null,
     val eventLog: List<String> = listOf("Welcome to Pai Sho."),
     val isGameOver: Boolean = false,
