@@ -138,7 +138,7 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Text("Skud Pai Sho v0.0.24") },
+                        title = { Text("Skud Pai Sho v0.0.25") },
                         navigationIcon = {
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                 Icon(Icons.Default.Menu, contentDescription = "Open menu")

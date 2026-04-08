@@ -7,10 +7,10 @@ Native Android app for playing Skud Pai Sho with:
 
 ## Release
 
-- Current release: **v0.0.24**
-- Versioning policy: increment patch as **0.0.0x** per release (`v0.0.01`, `v0.0.02`, `v0.0.03`, `v0.0.04`, `v0.0.05`, `v0.0.06`, `v0.0.07`, `v0.0.08`, `v0.0.09`, `v0.0.10`, `v0.0.11`, `v0.0.12`, `v0.0.13`, `v0.0.14`, `v0.0.15`, `v0.0.16`, `v0.0.17`, `v0.0.18`, `v0.0.19`, `v0.0.20`, `v0.0.21`, `v0.0.22`, `v0.0.23`, `v0.0.24`, ...)
+- Current release: **v0.0.25**
+- Versioning policy: increment patch as **0.0.0x** per release (`v0.0.01`, `v0.0.02`, `v0.0.03`, `v0.0.04`, `v0.0.05`, `v0.0.06`, `v0.0.07`, `v0.0.08`, `v0.0.09`, `v0.0.10`, `v0.0.11`, `v0.0.12`, `v0.0.13`, `v0.0.14`, `v0.0.15`, `v0.0.16`, `v0.0.17`, `v0.0.18`, `v0.0.19`, `v0.0.20`, `v0.0.21`, `v0.0.22`, `v0.0.23`, `v0.0.24`, `v0.0.25`, ...)
 
-## Current implementation (v0.0.24)
+## Current implementation (v0.0.25)
 
 This repository includes a native Android project written in Kotlin + Jetpack Compose with:
 
@@ -39,6 +39,14 @@ This repository includes a native Android project written in Kotlin + Jetpack Co
   - retained app-bundled launcher icon resource instead of platform-default icon resources
 - v0.0.23 multiplayer connect hotfix: enabled Kotlin serialization compiler plugin in `:app` so multiplayer DTO serializers are generated at compile time (`LoginRequestDto` and related payloads).
 - v0.0.24 multiplayer HTTP-connect hotfix: re-enabled Android cleartext traffic at app level for NAS/LAN HTTP endpoints (for example `http://<host>:8080`), preventing cleartext network-security-policy blocks on login/connect.
+- v0.0.25 multiplayer game-access improvements:
+  - online server games now surface in Existing Games
+  - tap-to-open/tap-to-join behavior on Multiplayer and Existing Games lists
+  - direct open flow for joinable posted games waiting for a second player
+- v0.0.25 UI settings improvements:
+  - light/dark theme toggle in Settings
+  - move-hint toggle
+  - harmony line highlight toggle
 - Reintroduced in-app multiplayer UI navigation/screen flow in v0.0.22 (configure/login/create/join/list/refresh) without changing startup initialization behavior
 - Unit tests for core rule transitions and legality scenarios
 
