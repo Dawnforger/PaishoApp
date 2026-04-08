@@ -163,13 +163,15 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
                     )
                     AppScreen.Multiplayer -> MultiplayerScreen(
                         state = state.multiplayerSession,
-                        localGames = state.existingGames,
+                        localGames = state.existingGames.filter { it.type == ExistingGameType.LOCAL },
                         onSaveConfig = viewModel::configureMultiplayer,
                         onLogin = viewModel::loginMultiplayer,
                         onCreateOnlineGame = viewModel::createOnlineGame,
                         onRefreshOnlineGame = viewModel::refreshOnlineGame,
                         onListOnlineGames = viewModel::listOnlineGames,
                         onJoinOnlineGame = viewModel::joinOnlineGame,
+                        onOpenOnlineGame = viewModel::openOnlineGameFromMultiplayer,
+                        onOpenExistingGame = viewModel::resumeGame,
                         onOpenLocalSetup = viewModel::startNewGameFlow,
                     )
                     AppScreen.Game -> GameScreen(viewModel = viewModel)
@@ -292,7 +294,12 @@ private fun ExistingGamesScreen(
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(game.title, fontWeight = FontWeight.SemiBold)
                             Text(game.subtitle, style = MaterialTheme.typography.bodySmall)
-                            Text("Tap to resume", style = MaterialTheme.typography.labelSmall)
+                            val actionText = if (game.type == ExistingGameType.ONLINE && game.isJoinableOnline) {
+                                "Tap to join"
+                            } else {
+                                "Tap to open"
+                            }
+                            Text(actionText, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }

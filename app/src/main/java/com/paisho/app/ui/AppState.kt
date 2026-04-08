@@ -29,7 +29,15 @@ data class ExistingGameSummary(
     val id: String,
     val title: String,
     val subtitle: String,
+    val type: ExistingGameType = ExistingGameType.LOCAL,
+    val onlineGameId: String? = null,
+    val isJoinableOnline: Boolean = false,
 )
+
+enum class ExistingGameType {
+    LOCAL,
+    ONLINE,
+}
 
 data class MultiplayerGameSummary(
     val gameId: String,
@@ -37,6 +45,8 @@ data class MultiplayerGameSummary(
     val status: String,
     val turnNumber: Int,
     val currentTurnPlayerId: String?,
+    val hostPlayerId: String,
+    val guestPlayerId: String?,
 )
 
 data class MultiplayerSession(
@@ -58,6 +68,19 @@ data class PersistedGame(
     val title: String,
     val subtitle: String,
     val state: GameState,
+)
+
+data class OnlineGameView(
+    val gameId: String,
+    val title: String,
+    val status: String,
+    val turnNumber: Int,
+    val currentTurnPlayerId: String?,
+    val boardSnapshot: Map<Position, String>,
+    val phase: GamePhase,
+    val winner: Player?,
+    val isDraw: Boolean,
+    val endReason: GameEndReason?,
 )
 
 data class BoardVisualConfig(
@@ -103,6 +126,7 @@ data class GameUiState(
     val harmonyBonusFlowerOptions: Set<TileType> = emptySet(),
     val harmonyBonusAccentOptions: Set<AccentType> = emptySet(),
     val boardSnapshot: Map<Position, String> = emptyMap(),
+    val onlineGameView: OnlineGameView? = null,
     val eventLog: List<String> = listOf("Welcome to Pai Sho."),
     val isGameOver: Boolean = false,
     val isDraw: Boolean = false,

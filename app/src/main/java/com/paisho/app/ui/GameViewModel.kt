@@ -1,7 +1,10 @@
 package com.paisho.app.ui
 
 import androidx.lifecycle.ViewModel
+import com.paisho.app.network.GameDetailsDto
+import com.paisho.app.network.GameSummaryDto
 import com.paisho.app.network.MultiplayerRepository
+import com.paisho.app.network.ServerGameStateDto
 import com.paisho.core.ai.SimpleAi
 import com.paisho.core.game.AccentType
 import com.paisho.core.game.BonusAction
@@ -56,6 +59,7 @@ class GameViewModel : ViewModel() {
             harmonyBonusAccentOptions = emptySet(),
             canChooseNoBonus = false,
             projectedBoardSnapshot = emptyMap(),
+            onlineGameView = null,
             setupState = NewGameSetupState(),
             existingGames = emptyList(),
             appScreen = AppScreen.Home,
@@ -70,9 +74,18 @@ class GameViewModel : ViewModel() {
 
     fun openExistingGames() {
         _uiState.update { it.copy(appScreen = AppScreen.ExistingGames, drawerSection = DrawerSection.ExistingGames) }
+        val session = _uiState.value.multiplayerSession
+        if (!session.token.isNullOrBlank() && !session.isBusy) {
+            listOnlineGames()
+        }
     }
 
     fun resumeGame(gameId: String) {
+        val selected = _uiState.value.existingGames.firstOrNull { it.id == gameId }
+        if (selected?.type == ExistingGameType.ONLINE) {
+            openOnlineGameFromExisting(selected)
+            return
+        }
         val persisted = persistedGames[gameId] ?: return
         state = persisted.state
         currentGameId = gameId
@@ -81,6 +94,7 @@ class GameViewModel : ViewModel() {
         stagedActions = emptyList()
         clearHarmonyBonusState()
         clearStagedHarmonyUndoState()
+        val existing = _uiState.value.existingGames
         _uiState.value = state.toUiState(
             log = _uiState.value.eventLog + "Resumed ${persisted.title}.",
             selectedTileType = null,
@@ -95,11 +109,13 @@ class GameViewModel : ViewModel() {
             harmonyBonusAccentOptions = emptySet(),
             canChooseNoBonus = false,
             projectedBoardSnapshot = emptyMap(),
+            onlineGameView = null,
             setupState = _uiState.value.setupState,
-            existingGames = _uiState.value.existingGames,
+            existingGames = existing,
             appScreen = AppScreen.Game,
             drawerSection = DrawerSection.Game,
         )
+        syncPersistedGames(existing)
     }
 
     fun openSettings() {
@@ -117,6 +133,7 @@ class GameViewModel : ViewModel() {
         }
         multiplayerRepository.configure(baseUrl = baseUrl, playerId = playerId)
         _uiState.update {
+            val localOnlyExisting = it.existingGames.filter { game -> game.type == ExistingGameType.LOCAL }
             it.copy(
                 multiplayerSession = it.multiplayerSession.copy(
                     configured = true,
@@ -129,6 +146,8 @@ class GameViewModel : ViewModel() {
                     games = emptyList(),
                     lastError = null,
                 ),
+                existingGames = localOnlyExisting,
+                onlineGameView = null,
             )
         }
         appendLog("Multiplayer configured for player $playerId.")
@@ -184,17 +203,11 @@ class GameViewModel : ViewModel() {
                 guestAccentLoadout = accents,
             )
             result.onSuccess { created ->
-                _uiState.update {
-                    it.copy(
-                        multiplayerSession = it.multiplayerSession.copy(
-                            isBusy = false,
-                            gameId = created.summary.gameId,
-                            serverVersion = created.summary.version,
-                            lastError = null,
-                        ),
-                    )
-                }
-                appendLog("Created online game ${created.summary.gameId.take(8)}.")
+                applyOnlineGameDetails(
+                    details = created,
+                    logMessage = "Created online game ${created.summary.gameId.take(8)}.",
+                    navigateToGame = false,
+                )
             }.onFailure { error ->
                 _uiState.update {
                     it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
@@ -214,17 +227,11 @@ class GameViewModel : ViewModel() {
         ioScope.launch {
             val result = multiplayerRepository.getGame(gameId)
             result.onSuccess { details ->
-                _uiState.update {
-                    it.copy(
-                        multiplayerSession = it.multiplayerSession.copy(
-                            isBusy = false,
-                            gameId = details.summary.gameId,
-                            serverVersion = details.summary.version,
-                            lastError = null,
-                        ),
-                    )
-                }
-                appendLog("Refreshed online game ${details.summary.gameId.take(8)}.")
+                applyOnlineGameDetails(
+                    details = details,
+                    logMessage = "Refreshed online game ${details.summary.gameId.take(8)}.",
+                    navigateToGame = false,
+                )
             }.onFailure { error ->
                 _uiState.update {
                     it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
@@ -235,6 +242,27 @@ class GameViewModel : ViewModel() {
     }
 
     fun joinOnlineGame(gameId: String) {
+        joinOnlineGameInternal(gameId, navigateToGame = true)
+    }
+
+    fun openOnlineGameFromMultiplayer(gameId: String) {
+        val selected = _uiState.value.multiplayerSession.games.firstOrNull { it.gameId == gameId }
+        if (selected == null) {
+            appendLog("Selected online game was not found in the list.")
+            return
+        }
+        val sessionPlayerId = _uiState.value.multiplayerSession.playerId
+        val shouldJoin = selected.guestPlayerId.isNullOrBlank() &&
+            !sessionPlayerId.isNullOrBlank() &&
+            selected.hostPlayerId != sessionPlayerId
+        if (shouldJoin) {
+            joinOnlineGameInternal(selected.gameId, navigateToGame = true)
+            return
+        }
+        fetchOnlineGameAndOpen(selected.gameId, navigateToGame = true)
+    }
+
+    private fun joinOnlineGameInternal(gameId: String, navigateToGame: Boolean) {
         if (gameId.isBlank()) {
             appendLog("Game ID is required to join an online game.")
             return
@@ -248,17 +276,11 @@ class GameViewModel : ViewModel() {
         ioScope.launch {
             val result = multiplayerRepository.joinGame(gameId.trim())
             result.onSuccess { details ->
-                _uiState.update {
-                    it.copy(
-                        multiplayerSession = it.multiplayerSession.copy(
-                            isBusy = false,
-                            gameId = details.summary.gameId,
-                            serverVersion = details.summary.version,
-                            lastError = null,
-                        ),
-                    )
-                }
-                appendLog("Joined online game ${details.summary.gameId.take(8)}.")
+                applyOnlineGameDetails(
+                    details = details,
+                    logMessage = "Joined online game ${details.summary.gameId.take(8)}.",
+                    navigateToGame = navigateToGame,
+                )
             }.onFailure { error ->
                 _uiState.update {
                     it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
@@ -289,9 +311,26 @@ class GameViewModel : ViewModel() {
                                     status = summary.status.name,
                                     turnNumber = summary.turnNumber,
                                     currentTurnPlayerId = summary.currentTurnPlayerId,
+                                    hostPlayerId = summary.hostPlayerId,
+                                    guestPlayerId = summary.guestPlayerId,
                                 )
                             },
                             lastError = null,
+                        ),
+                        existingGames = mergeOnlineExistingGames(
+                            current = it.existingGames,
+                            onlineGames = games.map { summary ->
+                                MultiplayerGameSummary(
+                                    gameId = summary.gameId,
+                                    title = summary.title,
+                                    status = summary.status.name,
+                                    turnNumber = summary.turnNumber,
+                                    currentTurnPlayerId = summary.currentTurnPlayerId,
+                                    hostPlayerId = summary.hostPlayerId,
+                                    guestPlayerId = summary.guestPlayerId,
+                                )
+                            },
+                            sessionPlayerId = it.multiplayerSession.playerId,
                         ),
                     )
                 }
@@ -392,6 +431,7 @@ class GameViewModel : ViewModel() {
             harmonyBonusAccentOptions = emptySet(),
             canChooseNoBonus = false,
             projectedBoardSnapshot = emptyMap(),
+            onlineGameView = null,
             setupState = setup,
             existingGames = updatedExistingGames,
             appScreen = AppScreen.Game,
@@ -680,6 +720,7 @@ class GameViewModel : ViewModel() {
             harmonyBonusAccentOptions = harmonyBonusAccentOptions(),
             canChooseNoBonus = isHarmonyBonusPending(),
             projectedBoardSnapshot = pendingHarmonyPreviewState?.boardSnapshot() ?: emptyMap(),
+            onlineGameView = _uiState.value.onlineGameView,
             setupState = _uiState.value.setupState,
             existingGames = currentExisting,
             appScreen = _uiState.value.appScreen,
@@ -705,26 +746,39 @@ class GameViewModel : ViewModel() {
         harmonyBonusAccentOptions: Set<AccentType>,
         canChooseNoBonus: Boolean,
         projectedBoardSnapshot: Map<Position, String>,
+        onlineGameView: OnlineGameView?,
         setupState: NewGameSetupState,
         existingGames: List<ExistingGameSummary>,
         appScreen: AppScreen,
         drawerSection: DrawerSection,
     ): GameUiState {
+        val isOnlineView = onlineGameView != null
         val reserveOwner = if (isAwaitingSubmit) Player.HUMAN else currentPlayer
         val reserve = reserves[reserveOwner] ?: reserves.getValue(Player.HUMAN)
         val flowerCounts = (TileType.basicTypes + TileType.specialTypes).associateWith { tile ->
             if (tile.isBasic) reserve.basicCount(tile) else reserve.specialCount(tile)
         }
         val accentCounts = AccentType.entries.associateWith { accent -> reserve.accentCount(accent) }
+        val effectiveBoardSnapshot = onlineGameView?.boardSnapshot ?: boardSnapshot()
+        val effectivePhase = onlineGameView?.phase ?: phase
+        val effectiveWinner = onlineGameView?.winner ?: winner
+        val effectiveDraw = onlineGameView?.isDraw ?: isDraw
+        val effectiveEndReason = onlineGameView?.endReason ?: endReason
+        val effectiveIsGameOver = effectiveWinner != null || effectiveDraw || effectivePhase == GamePhase.FINISHED
 
         return GameUiState(
         boardSize = rules.boardSize,
         coordinateExtent = rules.coordinateExtent,
-        currentPlayer = if (isAwaitingSubmit) Player.HUMAN else currentPlayer,
+        currentPlayer = if (isOnlineView || isAwaitingSubmit) Player.HUMAN else currentPlayer,
         isAwaitingSubmit = isAwaitingSubmit,
-        canSubmitTurn = isAwaitingSubmit,
-        canUndoTurn = isAwaitingSubmit || isHarmonyBonusFlow,
-        canInteract = !isAwaitingSubmit && winner == null && !isDraw && phase != GamePhase.FINISHED && currentPlayer == Player.HUMAN,
+        canSubmitTurn = isAwaitingSubmit && !isOnlineView,
+        canUndoTurn = (isAwaitingSubmit || isHarmonyBonusFlow) && !isOnlineView,
+        canInteract = !isOnlineView &&
+            !isAwaitingSubmit &&
+            winner == null &&
+            !isDraw &&
+            phase != GamePhase.FINISHED &&
+            currentPlayer == Player.HUMAN,
         selectedSource = selectedSource,
         selectedTarget = selectedTarget,
         legalTargets = legalTargets,
@@ -741,13 +795,14 @@ class GameViewModel : ViewModel() {
         selectedAccentType = selectedAccentType,
         flowerReserveCounts = flowerCounts,
         accentReserveCounts = accentCounts,
-        boardSnapshot = boardSnapshot(),
+        boardSnapshot = effectiveBoardSnapshot,
+        onlineGameView = onlineGameView,
         eventLog = log,
-        isGameOver = winner != null || isDraw || phase == GamePhase.FINISHED,
-        isDraw = isDraw,
-        winner = winner,
-        endReason = endReason,
-        phase = phase,
+        isGameOver = effectiveIsGameOver,
+        isDraw = effectiveDraw,
+        winner = effectiveWinner,
+        endReason = effectiveEndReason,
+        phase = effectivePhase,
         setupState = setupState,
         existingGames = existingGames,
         appScreen = appScreen,
@@ -899,7 +954,8 @@ class GameViewModel : ViewModel() {
     }
 
     private fun syncPersistedGames(existing: List<ExistingGameSummary>) {
-        existing.forEach { summary ->
+        val localExisting = existing.filter { it.type == ExistingGameType.LOCAL }
+        localExisting.forEach { summary ->
             val old = persistedGames[summary.id]
             val isCurrent = summary.id == currentGameId
             if (old == null) {
@@ -917,9 +973,141 @@ class GameViewModel : ViewModel() {
                 state = if (isCurrent) state else old.state,
             )
         }
-        val validIds = existing.map { it.id }.toSet()
+        val validIds = localExisting.map { it.id }.toSet()
         persistedGames.keys.retainAll(validIds)
     }
+
+    private fun openOnlineGameFromExisting(summary: ExistingGameSummary) {
+        val onlineGameId = summary.onlineGameId
+        if (onlineGameId.isNullOrBlank()) {
+            appendLog("Selected online game is missing its server ID.")
+            return
+        }
+        val session = _uiState.value.multiplayerSession
+        if (session.token.isNullOrBlank()) {
+            appendLog("Login to multiplayer before opening online games.")
+            openMultiplayer()
+            return
+        }
+        if (summary.isJoinableOnline) {
+            joinOnlineGameInternal(onlineGameId, navigateToGame = true)
+            return
+        }
+        fetchOnlineGameAndOpen(onlineGameId, navigateToGame = true)
+    }
+
+    private fun fetchOnlineGameAndOpen(gameId: String, navigateToGame: Boolean) {
+        _uiState.update { it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = true, lastError = null)) }
+        ioScope.launch {
+            val result = multiplayerRepository.getGame(gameId)
+            result.onSuccess { details ->
+                applyOnlineGameDetails(
+                    details = details,
+                    logMessage = "Opened online game ${details.summary.gameId.take(8)}.",
+                    navigateToGame = navigateToGame,
+                )
+            }.onFailure { error ->
+                _uiState.update {
+                    it.copy(multiplayerSession = it.multiplayerSession.copy(isBusy = false, lastError = error.message))
+                }
+                appendLog("Open online game failed: ${error.message}")
+            }
+        }
+    }
+
+    private fun applyOnlineGameDetails(
+        details: GameDetailsDto,
+        logMessage: String,
+        navigateToGame: Boolean,
+    ) {
+        hasPendingTurnChanges = false
+        stagedActions = emptyList()
+        clearHarmonyBonusState()
+        clearStagedHarmonyUndoState()
+        val currentUi = _uiState.value
+        val mergedSessionGames = upsertOnlineSummary(currentUi.multiplayerSession.games, details.summary)
+        _uiState.update {
+            it.copy(
+                multiplayerSession = it.multiplayerSession.copy(
+                    isBusy = false,
+                    gameId = details.summary.gameId,
+                    serverVersion = details.summary.version,
+                    games = mergedSessionGames,
+                    lastError = null,
+                ),
+                existingGames = mergeOnlineExistingGames(
+                    current = it.existingGames,
+                    onlineGames = mergedSessionGames,
+                    sessionPlayerId = it.multiplayerSession.playerId,
+                ),
+                onlineGameView = details.toOnlineGameView(),
+                appScreen = if (navigateToGame) AppScreen.Game else it.appScreen,
+                drawerSection = if (navigateToGame) DrawerSection.Game else it.drawerSection,
+            )
+        }
+        appendLog(logMessage)
+    }
+
+    private fun upsertOnlineSummary(
+        current: List<MultiplayerGameSummary>,
+        summary: GameSummaryDto,
+    ): List<MultiplayerGameSummary> {
+        val updated = MultiplayerGameSummary(
+            gameId = summary.gameId,
+            title = summary.title,
+            status = summary.status.name,
+            turnNumber = summary.turnNumber,
+            currentTurnPlayerId = summary.currentTurnPlayerId,
+            hostPlayerId = summary.hostPlayerId,
+            guestPlayerId = summary.guestPlayerId,
+        )
+        val existingIndex = current.indexOfFirst { it.gameId == summary.gameId }
+        return if (existingIndex < 0) {
+            listOf(updated) + current
+        } else {
+            current.toMutableList().also { it[existingIndex] = updated }
+        }
+    }
+
+    private fun mergeOnlineExistingGames(
+        current: List<ExistingGameSummary>,
+        onlineGames: List<MultiplayerGameSummary>,
+        sessionPlayerId: String?,
+    ): List<ExistingGameSummary> {
+        val local = current.filter { it.type == ExistingGameType.LOCAL }
+        val online = onlineGames.map { summary ->
+            val joinable = summary.guestPlayerId.isNullOrBlank() &&
+                !sessionPlayerId.isNullOrBlank() &&
+                summary.hostPlayerId != sessionPlayerId
+            ExistingGameSummary(
+                id = "online-${summary.gameId}",
+                title = summary.title,
+                subtitle = "Online • ${summary.status} • turn ${summary.turnNumber}",
+                type = ExistingGameType.ONLINE,
+                onlineGameId = summary.gameId,
+                isJoinableOnline = joinable,
+            )
+        }
+        return online + local
+    }
+
+    private fun GameDetailsDto.toOnlineGameView(): OnlineGameView = OnlineGameView(
+        gameId = summary.gameId,
+        title = summary.title,
+        status = summary.status.name,
+        turnNumber = summary.turnNumber,
+        currentTurnPlayerId = summary.currentTurnPlayerId,
+        boardSnapshot = state.toBoardSnapshotMap(),
+        phase = state.phase,
+        winner = state.winner,
+        isDraw = state.isDraw,
+        endReason = state.endReason,
+    )
+
+    private fun ServerGameStateDto.toBoardSnapshotMap(): Map<Position, String> =
+        boardSnapshot.associate { cell ->
+            Position(row = cell.position.row, col = cell.position.col) to cell.token
+        }
 
     private fun defaultBoardVisualConfig(): BoardVisualConfig = BoardVisualConfig(
         backgroundImageResId = null,
