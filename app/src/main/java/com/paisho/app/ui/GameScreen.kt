@@ -138,7 +138,7 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
             Scaffold(
                 topBar = {
                     TopAppBar(
-                        title = { Text("Skud Pai Sho v0.0.25") },
+                        title = { Text("Skud Pai Sho v0.0.26") },
                         navigationIcon = {
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                 Icon(Icons.Default.Menu, contentDescription = "Open menu")
@@ -174,6 +174,8 @@ fun PaiShoApp(viewModel: GameViewModel = viewModel()) {
                             onListOnlineGames = viewModel::listOnlineGames,
                             onJoinOnlineGame = viewModel::joinOnlineGame,
                             onOpenOnlineGame = viewModel::openOnlineGameFromMultiplayer,
+                        onSelectSavedServer = viewModel::selectSavedServer,
+                        onStartNewServerDraft = viewModel::startNewSavedServerDraft,
                             onOpenExistingGame = viewModel::resumeGame,
                             onOpenLocalSetup = viewModel::startNewGameFlow,
                         )

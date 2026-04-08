@@ -7,10 +7,10 @@ Native Android app for playing Skud Pai Sho with:
 
 ## Release
 
-- Current release: **v0.0.25**
-- Versioning policy: increment patch as **0.0.0x** per release (`v0.0.01`, `v0.0.02`, `v0.0.03`, `v0.0.04`, `v0.0.05`, `v0.0.06`, `v0.0.07`, `v0.0.08`, `v0.0.09`, `v0.0.10`, `v0.0.11`, `v0.0.12`, `v0.0.13`, `v0.0.14`, `v0.0.15`, `v0.0.16`, `v0.0.17`, `v0.0.18`, `v0.0.19`, `v0.0.20`, `v0.0.21`, `v0.0.22`, `v0.0.23`, `v0.0.24`, `v0.0.25`, ...)
+- Current release: **v0.0.26**
+- Versioning policy: increment patch as **0.0.0x** per release (`v0.0.01`, `v0.0.02`, `v0.0.03`, `v0.0.04`, `v0.0.05`, `v0.0.06`, `v0.0.07`, `v0.0.08`, `v0.0.09`, `v0.0.10`, `v0.0.11`, `v0.0.12`, `v0.0.13`, `v0.0.14`, `v0.0.15`, `v0.0.16`, `v0.0.17`, `v0.0.18`, `v0.0.19`, `v0.0.20`, `v0.0.21`, `v0.0.22`, `v0.0.23`, `v0.0.24`, `v0.0.25`, `v0.0.26`, ...)
 
-## Current implementation (v0.0.25)
+## Current implementation (v0.0.26)
 
 This repository includes a native Android project written in Kotlin + Jetpack Compose with:
 
@@ -49,6 +49,10 @@ This repository includes a native Android project written in Kotlin + Jetpack Co
   - light/dark theme toggle in Settings
   - move-hint toggle
   - harmony line highlight toggle
+- v0.0.26 persistence + multiplayer server profile improvements:
+  - local on-device JSON persistence for app settings and saved multiplayer server profiles
+  - restored settings and preferred server profile automatically applied after app restart
+  - multiplayer server profile dropdown added to select between multiple saved server instances
 - Reintroduced in-app multiplayer UI navigation/screen flow in v0.0.22 (configure/login/create/join/list/refresh) without changing startup initialization behavior
 - Unit tests for core rule transitions and legality scenarios
 

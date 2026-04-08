@@ -18,6 +18,25 @@ class MultiplayerRepository(
         this.activeGameId = null
     }
 
+    fun restoreSession(
+        baseUrl: String,
+        playerId: String,
+        token: String?,
+        activeGameId: String?,
+    ) {
+        this.baseUrl = baseUrl.trim().trimEnd('/')
+        this.playerId = playerId.trim()
+        this.token = token
+        this.activeGameId = activeGameId
+    }
+
+    fun clearSession() {
+        this.baseUrl = ""
+        this.playerId = ""
+        this.token = null
+        this.activeGameId = null
+    }
+
     suspend fun login(): Result<LoginResponseDto> = runCatching {
         require(baseUrl.isNotBlank()) { "Multiplayer base URL not configured." }
         require(playerId.isNotBlank()) { "Multiplayer player ID not configured." }

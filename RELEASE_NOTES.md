@@ -1,5 +1,20 @@
 # Release Notes
 
+## v0.0.26
+
+- Added local on-device persistence file for app settings and multiplayer server profiles.
+- App now remembers settings across restarts:
+  - theme selection
+  - move hint toggle
+  - harmony line highlight toggle
+- App now remembers multiplayer server configuration across restarts:
+  - base URL
+  - player ID
+  - display name
+  - selected preferred server profile
+- Added multiplayer server profile dropdown so users can switch between multiple saved server instances.
+- Updated app version metadata and in-app labels for v0.0.26.
+
 ## v0.0.25
 
 - Added clickable online game access across multiplayer flows:

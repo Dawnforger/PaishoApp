@@ -49,6 +49,17 @@ data class MultiplayerGameSummary(
     val guestPlayerId: String?,
 )
 
+data class SavedServerProfile(
+    val id: String,
+    val name: String,
+    val baseUrl: String,
+    val playerId: String,
+    val playerName: String = "",
+    val token: String? = null,
+    val lastGameId: String? = null,
+    val serverVersion: Int? = null,
+)
+
 data class MultiplayerSession(
     val configured: Boolean = false,
     val baseUrl: String? = null,
@@ -60,6 +71,8 @@ data class MultiplayerSession(
     val joinGameIdInput: String = "",
     val isBusy: Boolean = false,
     val games: List<MultiplayerGameSummary> = emptyList(),
+    val savedServers: List<SavedServerProfile> = emptyList(),
+    val selectedServerId: String? = null,
     val lastError: String? = null,
 )
 

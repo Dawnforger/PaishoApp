@@ -1,10 +1,15 @@
 package com.paisho.app.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import com.paisho.app.network.GameDetailsDto
 import com.paisho.app.network.GameSummaryDto
 import com.paisho.app.network.MultiplayerRepository
 import com.paisho.app.network.ServerGameStateDto
+import com.paisho.app.storage.LocalUserStateStore
+import com.paisho.app.storage.PersistedServerProfileDto
+import com.paisho.app.storage.PersistedSettingsDto
+import com.paisho.app.storage.PersistedUserStateDto
 import com.paisho.core.ai.SimpleAi
 import com.paisho.core.game.AccentType
 import com.paisho.core.game.BonusAction
@@ -25,7 +30,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class GameViewModel : ViewModel() {
+class GameViewModel(application: Application) : AndroidViewModel(application) {
     private data class HarmonyUndoState(
         val startState: GameState,
         val candidates: List<Move.Slide>,
@@ -33,6 +38,7 @@ class GameViewModel : ViewModel() {
 
     private val ai = SimpleAi()
     private val multiplayerRepository = MultiplayerRepository()
+    private val localUserStateStore = LocalUserStateStore(application.applicationContext)
     private val ioScope = CoroutineScope(Dispatchers.IO)
     private var state: GameState = GameState.initial(defaultRulesConfig())
     private var turnStartState: GameState = state
@@ -46,7 +52,7 @@ class GameViewModel : ViewModel() {
     private var stagedHarmonyUndoState: HarmonyUndoState? = null
     private val _uiState = MutableStateFlow(
         state.toUiState(
-            log = listOf("Skud Pai Sho v0.0.25 - full rules engine enabled."),
+            log = listOf("Skud Pai Sho v0.0.26 - full rules engine enabled."),
             selectedTileType = null,
             selectedAccentType = null,
             isAwaitingSubmit = false,
@@ -68,6 +74,10 @@ class GameViewModel : ViewModel() {
         )
     )
     val uiState: StateFlow<GameUiState> = _uiState.asStateFlow()
+
+    init {
+        loadLocalUserState()
+    }
 
     fun openHome() {
         _uiState.update { it.copy(appScreen = AppScreen.Home, drawerSection = DrawerSection.Game) }
@@ -128,6 +138,7 @@ class GameViewModel : ViewModel() {
         if (_uiState.value.settings.themeMode == themeMode) return
         _uiState.update { it.copy(settings = it.settings.copy(themeMode = themeMode)) }
         publishState(clearSelection = false)
+        persistLocalUserState()
         appendLog("Theme set to ${themeMode.name.lowercase()}.")
     }
 
@@ -135,6 +146,7 @@ class GameViewModel : ViewModel() {
         if (_uiState.value.settings.showHarmonyLines == enabled) return
         _uiState.update { it.copy(settings = it.settings.copy(showHarmonyLines = enabled)) }
         publishState(clearSelection = false)
+        persistLocalUserState()
         appendLog("Harmony line highlights ${if (enabled) "enabled" else "disabled"}.")
     }
 
@@ -142,6 +154,7 @@ class GameViewModel : ViewModel() {
         if (_uiState.value.settings.showMoveHints == enabled) return
         _uiState.update { it.copy(settings = it.settings.copy(showMoveHints = enabled)) }
         publishState(clearSelection = false)
+        persistLocalUserState()
         appendLog("Move hints ${if (enabled) "enabled" else "disabled"}.")
     }
 
@@ -149,31 +162,111 @@ class GameViewModel : ViewModel() {
         _uiState.update { it.copy(appScreen = AppScreen.Multiplayer, drawerSection = DrawerSection.Multiplayer) }
     }
 
+    fun selectSavedServer(serverId: String) {
+        val selected = _uiState.value.multiplayerSession.savedServers.firstOrNull { it.id == serverId }
+        if (selected == null) {
+            appendLog("Saved server profile was not found.")
+            return
+        }
+        multiplayerRepository.restoreSession(
+            baseUrl = selected.baseUrl,
+            playerId = selected.playerId,
+            token = selected.token,
+            activeGameId = selected.lastGameId,
+        )
+        _uiState.update {
+            it.copy(
+                multiplayerSession = it.multiplayerSession.copy(
+                    configured = true,
+                    baseUrl = selected.baseUrl,
+                    playerId = selected.playerId,
+                    playerName = selected.playerName.ifBlank { null },
+                    token = selected.token,
+                    gameId = selected.lastGameId,
+                    serverVersion = selected.serverVersion,
+                    selectedServerId = selected.id,
+                    lastError = null,
+                ),
+            )
+        }
+        persistLocalUserState()
+        appendLog("Selected saved server ${selected.name}.")
+    }
+
+    fun startNewSavedServerDraft() {
+        multiplayerRepository.clearSession()
+        _uiState.update {
+            it.copy(
+                multiplayerSession = it.multiplayerSession.copy(
+                    configured = false,
+                    baseUrl = null,
+                    playerId = null,
+                    playerName = null,
+                    token = null,
+                    gameId = null,
+                    serverVersion = null,
+                    selectedServerId = null,
+                    lastError = null,
+                ),
+            )
+        }
+        persistLocalUserState()
+        appendLog("Ready to save a new server profile.")
+    }
+
     fun configureMultiplayer(baseUrl: String, playerId: String, playerName: String) {
         if (baseUrl.isBlank() || playerId.isBlank()) {
             appendLog("Multiplayer config requires base URL and player ID.")
             return
         }
-        multiplayerRepository.configure(baseUrl = baseUrl, playerId = playerId)
+        val normalizedBaseUrl = baseUrl.trim().trimEnd('/')
+        val normalizedPlayerId = playerId.trim()
+        val normalizedPlayerName = playerName.trim()
+        multiplayerRepository.configure(baseUrl = normalizedBaseUrl, playerId = normalizedPlayerId)
         _uiState.update {
             val localOnlyExisting = it.existingGames.filter { game -> game.type == ExistingGameType.LOCAL }
+            val existingByIdentity = it.multiplayerSession.savedServers.firstOrNull { server ->
+                server.baseUrl.equals(normalizedBaseUrl, ignoreCase = true) &&
+                    server.playerId == normalizedPlayerId
+            }
+            val selectedId = it.multiplayerSession.selectedServerId ?: existingByIdentity?.id ?: "server-${System.currentTimeMillis()}"
+            val profileName = normalizedPlayerName.ifBlank {
+                "$normalizedPlayerId @ ${normalizedBaseUrl.removePrefix("http://").removePrefix("https://")}"
+            }
+            val updatedProfile = SavedServerProfile(
+                id = selectedId,
+                name = profileName,
+                baseUrl = normalizedBaseUrl,
+                playerId = normalizedPlayerId,
+                playerName = normalizedPlayerName,
+                token = null,
+                lastGameId = null,
+                serverVersion = null,
+            )
+            val updatedSavedServers = upsertSavedServerProfile(
+                current = it.multiplayerSession.savedServers,
+                updated = updatedProfile,
+            )
             it.copy(
                 multiplayerSession = it.multiplayerSession.copy(
                     configured = true,
-                    baseUrl = baseUrl,
-                    playerId = playerId,
-                    playerName = playerName.ifBlank { null },
+                    baseUrl = normalizedBaseUrl,
+                    playerId = normalizedPlayerId,
+                    playerName = normalizedPlayerName.ifBlank { null },
                     token = null,
                     gameId = null,
                     serverVersion = null,
                     games = emptyList(),
+                    savedServers = updatedSavedServers,
+                    selectedServerId = selectedId,
                     lastError = null,
                 ),
                 existingGames = localOnlyExisting,
                 onlineGameView = null,
             )
         }
-        appendLog("Multiplayer configured for player $playerId.")
+        persistLocalUserState()
+        appendLog("Multiplayer configured for player $normalizedPlayerId.")
     }
 
     fun loginMultiplayer() {
@@ -187,15 +280,28 @@ class GameViewModel : ViewModel() {
             val result = multiplayerRepository.login()
             result.onSuccess { login ->
                 _uiState.update {
+                    val selectedId = it.multiplayerSession.selectedServerId
+                    val updatedSavedServers = it.multiplayerSession.savedServers.map { server ->
+                        if (server.id == selectedId) {
+                            server.copy(
+                                token = login.token,
+                                playerId = login.playerId,
+                            )
+                        } else {
+                            server
+                        }
+                    }
                     it.copy(
                         multiplayerSession = it.multiplayerSession.copy(
                             isBusy = false,
                             token = login.token,
                             playerId = login.playerId,
+                            savedServers = updatedSavedServers,
                             lastError = null,
                         ),
                     )
                 }
+                persistLocalUserState()
                 appendLog("Multiplayer login successful for ${login.playerId}.")
             }.onFailure { error ->
                 _uiState.update {
@@ -1034,6 +1140,96 @@ class GameViewModel : ViewModel() {
         persistedGames.keys.retainAll(validIds)
     }
 
+    private fun loadLocalUserState() {
+        ioScope.launch {
+            val persisted = localUserStateStore.load()
+            _uiState.update { ui ->
+                val restoredSettings = AppSettings(
+                    themeMode = runCatching { AppThemeMode.valueOf(persisted.settings.themeMode) }
+                        .getOrDefault(AppThemeMode.LIGHT),
+                    showHarmonyLines = persisted.settings.showHarmonyLines,
+                    showMoveHints = persisted.settings.showMoveHints,
+                )
+                val restoredServers = persisted.servers.map { it.toSavedServerProfile() }
+                val selectedServer = restoredServers.firstOrNull { it.id == persisted.selectedServerId }
+                    ?: restoredServers.firstOrNull()
+                if (selectedServer != null) {
+                    multiplayerRepository.restoreSession(
+                        baseUrl = selectedServer.baseUrl,
+                        playerId = selectedServer.playerId,
+                        token = selectedServer.token,
+                        activeGameId = selectedServer.lastGameId,
+                    )
+                }
+                ui.copy(
+                    settings = restoredSettings,
+                    multiplayerSession = ui.multiplayerSession.copy(
+                        configured = selectedServer != null,
+                        baseUrl = selectedServer?.baseUrl,
+                        playerId = selectedServer?.playerId,
+                        playerName = selectedServer?.playerName?.ifBlank { null },
+                        token = selectedServer?.token,
+                        gameId = selectedServer?.lastGameId,
+                        serverVersion = selectedServer?.serverVersion,
+                        savedServers = restoredServers,
+                        selectedServerId = selectedServer?.id,
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun persistLocalUserState() {
+        val snapshot = _uiState.value
+        ioScope.launch {
+            localUserStateStore.save(snapshot.toPersistedUserState())
+        }
+    }
+
+    private fun upsertSavedServerProfile(
+        current: List<SavedServerProfile>,
+        updated: SavedServerProfile,
+    ): List<SavedServerProfile> {
+        val index = current.indexOfFirst { it.id == updated.id }
+        return if (index < 0) {
+            listOf(updated) + current
+        } else {
+            current.toMutableList().also { it[index] = updated }
+        }
+    }
+
+    private fun GameUiState.toPersistedUserState(): PersistedUserStateDto = PersistedUserStateDto(
+        settings = PersistedSettingsDto(
+            themeMode = settings.themeMode.name,
+            showHarmonyLines = settings.showHarmonyLines,
+            showMoveHints = settings.showMoveHints,
+        ),
+        servers = multiplayerSession.savedServers.map { server ->
+            PersistedServerProfileDto(
+                id = server.id,
+                name = server.name,
+                baseUrl = server.baseUrl,
+                playerId = server.playerId,
+                playerName = server.playerName,
+                token = server.token,
+                lastGameId = server.lastGameId,
+                serverVersion = server.serverVersion,
+            )
+        },
+        selectedServerId = multiplayerSession.selectedServerId,
+    )
+
+    private fun PersistedServerProfileDto.toSavedServerProfile(): SavedServerProfile = SavedServerProfile(
+        id = id,
+        name = name,
+        baseUrl = baseUrl.trim().trimEnd('/'),
+        playerId = playerId.trim(),
+        playerName = playerName,
+        token = token,
+        lastGameId = lastGameId,
+        serverVersion = serverVersion,
+    )
+
     private fun openOnlineGameFromExisting(summary: ExistingGameSummary) {
         val onlineGameId = summary.onlineGameId
         if (onlineGameId.isNullOrBlank()) {
@@ -1084,12 +1280,25 @@ class GameViewModel : ViewModel() {
         val currentUi = _uiState.value
         val mergedSessionGames = upsertOnlineSummary(currentUi.multiplayerSession.games, details.summary)
         _uiState.update {
+            val selectedId = it.multiplayerSession.selectedServerId
+            val updatedSavedServers = it.multiplayerSession.savedServers.map { server ->
+                if (server.id == selectedId) {
+                    server.copy(
+                        lastGameId = details.summary.gameId,
+                        serverVersion = details.summary.version,
+                        token = it.multiplayerSession.token,
+                    )
+                } else {
+                    server
+                }
+            }
             it.copy(
                 multiplayerSession = it.multiplayerSession.copy(
                     isBusy = false,
                     gameId = details.summary.gameId,
                     serverVersion = details.summary.version,
                     games = mergedSessionGames,
+                    savedServers = updatedSavedServers,
                     lastError = null,
                 ),
                 existingGames = mergeOnlineExistingGames(
@@ -1102,6 +1311,7 @@ class GameViewModel : ViewModel() {
                 drawerSection = if (navigateToGame) DrawerSection.Game else it.drawerSection,
             )
         }
+        persistLocalUserState()
         appendLog(logMessage)
     }
 
